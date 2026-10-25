@@ -24,7 +24,7 @@ try {
   const seats = await pages[0].locator('.player').evaluateAll(cards => cards.map(c => c.dataset.seat));
   const act = async (actor, target, touch = false) => {
     const card = pages[actor].locator(`.player[data-seat="${seats[target]}"]`), confirm = pages[actor].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true });
-    if (touch) { await card.tap(); await confirm.tap(); } else { await card.click(); await confirm.click(); }
+    if (touch) { await card.tap(); if (await confirm.count()) await confirm.tap(); } else { await card.click(); if (await confirm.count()) await confirm.click(); }
     await expect(pages[actor].locator('#selection')).toContainText('คำสั่งล่าสุด');
   };
   await expect(pages[0].locator('#phase-title')).toHaveText('รุ่งเช้าแห่งความสงสัย', { timeout: 60000 }); console.log('PASS: first night advances with all actions AFK');

@@ -29,7 +29,7 @@ try {
   const wolfIndices=assigned.map((r,i)=>r.includes('มนุษย์หมาป่า')?i:-1).filter(i=>i>=0),seer=assigned.findIndex(r=>r.includes('ผู้หยั่งรู้')),doctor=assigned.findIndex(r=>r.includes('หมอ')),villagers=assigned.map((r,i)=>r.includes('ชาวบ้าน')?i:-1).filter(i=>i>=0);
   if(count===12){if(!assigned.some(r=>r.includes('นายพราน'))||!assigned.some(r=>r.includes('ผู้อาวุโส')))throw Error('12-player roles missing');}
   const seats=await pages[0].locator('.player').evaluateAll(bs=>bs.map(b=>b.dataset.seat));
-  const choose=async(actor,target)=>{await pages[actor].locator(`.player[data-seat="${seats[target]}"]`).click();await pages[actor].getByRole('button',{name:'ยืนยันเป้าหมาย →',exact:true}).focus();await pages[actor].keyboard.press('Enter');await expect(pages[actor].locator('#selection')).toContainText('คำสั่งล่าสุด');};
+  const choose=async(actor,target)=>{await pages[actor].locator(`.player[data-seat="${seats[target]}"]`).click();const confirm=pages[actor].getByRole('button',{name:'ยืนยันเป้าหมาย →',exact:true});if(await confirm.count()){await confirm.focus();await pages[actor].keyboard.press('Enter');}await expect(pages[actor].locator('#selection')).toContainText('คำสั่งล่าสุด');};
   for(let round=0;round<wolfIndices.length;round++){
    await expect(pages[0].locator('#phase-title')).toHaveText('ค่ำคืนแห่งความลับ',{timeout:15000});
    const target=villagers[round%villagers.length];

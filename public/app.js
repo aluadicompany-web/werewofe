@@ -51,6 +51,7 @@ $('reveal').onclick = () => { reveal = true; render(); };
 $('timing').onchange = () => send('settings', { timing: $('timing').value });
 $('chat-form').onsubmit = async e => { e.preventDefault(); const input = $('chat-input'); const value = input.value.trim(); if (!value) return; const res = await send('chat', { text: value, channel: state.phase === 'night' ? 'wolves' : 'village' }); if (res && input.value.trim() === value) input.value = ''; };
 function button(label, action, cls = '', disabled = false) { const b = text('button', label, cls); b.type = 'button'; b.disabled = disabled; b.onclick = action; return b; }
+const isVoting = () => ['voting','runoff'].includes(state?.phase);
 const finished = () => ['result','ended'].includes(state.phase);
 function canAct() { return state.me && (state.phase === 'hunter_reaction' ? state.me.canReact : state.me.alive && (['voting','runoff'].includes(state.phase) || state.phase === 'night' && ['werewolf','seer','doctor'].includes(state.me.role))); }
 function eligible(p) {
@@ -59,6 +60,12 @@ function eligible(p) {
   if (['voting','hunter_reaction'].includes(state.phase)) return true;
   const role = state.me.role;
   return role === 'werewolf' ? p.role !== 'werewolf' : role === 'seer' ? !p.me : role === 'doctor' ? p.id !== state.me.lastDoctor : false;
+}
+async function submitVote(target) {
+  if (!isVoting() || !state.me?.alive) return;
+  const { gameId, phaseId } = state;
+  const res = await send('action', { target, gameId, phaseId, actionId: crypto.randomUUID() });
+  if (res && state?.phaseId === phaseId) { toast('บันทึกโหวตแล้ว เปลี่ยนได้จนหมดเวลา'); }
 }
 async function submit() {
   if (busy || !selected) return; busy = true;
@@ -81,8 +88,8 @@ function render() {
     night: ['werewolf','seer','doctor'].includes(state.me.role) ? 'เลือกเป้าหมายแล้วกดยืนยัน เปลี่ยนคำสั่งได้จนหมดเวลา' : 'หมู่บ้านกำลังหลับใหล รอผลในยามรุ่งเช้า',
     announcement: 'เปิดเผยผู้เสียชีวิตและบทบาท กำลังเข้าสู่การสนทนา',
     discussion: 'แลกเปลี่ยนเบาะแสในแชต ใครพูดจริง ใครกำลังโกหก?',
-    voting: 'โหวตผู้เล่นที่ยังมีชีวิตหรืองดออกเสียง งดออกเสียงไม่นับเป็นคะแนนของผู้ต้องสงสัย',
-    runoff: 'เลือกได้เฉพาะผู้ที่คะแนนสูงสุดเสมอ หากยังเสมอจะไม่มีการประหาร',
+    voting: 'คลิกผู้เล่นเพื่อโหวตทันที เปลี่ยนได้ก่อนหมดเวลา ระบบจะนับผลเมื่อหมดเวลา',
+    runoff: 'คลิกผู้ที่คะแนนเสมอเพื่อโหวตทันที นับผลเมื่อหมดเวลา ถ้ายังเสมอจะไม่มีการประหาร',
     execution: 'รอผลการประหารและปฏิกิริยาของนายพราน ก่อนตรวจเงื่อนไขชนะ',
     hunter_reaction: state.me.canReact ? 'คุณมีโอกาสยิงครั้งสุดท้าย เลือกผู้มีชีวิตหนึ่งคน หรือข้ามภายในเวลา' : 'รอนายพรานตัดสินใจครั้งสุดท้าย เงื่อนไขชนะยังไม่ถูกตรวจระหว่างนี้',
     result: 'เปิดเผยทุกบทบาท รอสรุปผลก่อนเริ่มเกมถัดไป', ended: 'ความลับทั้งหมดถูกเปิดเผยแล้ว พร้อมกลับมาลองอีกครั้งไหม?'
@@ -96,8 +103,8 @@ function render() {
   state.players.forEach(p => {
     const myVote = ['voting','runoff'].includes(state.phase) && state.me.action === p.id;
     const can = eligible(p), roleVisible = p.role && (!p.me || reveal || finished() || !p.alive);
-    const b = button('', () => { selected = p.id; render(); }, `player ${myVote ? 'my-vote' : ''} ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
-    b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}${myVote ? ' คุณโหวตให้ผู้เล่นนี้แล้ว' : ''}`); b.setAttribute('aria-pressed', selected === p.id ? 'true' : 'false');
+    const b = button('', () => { if (isVoting()) { submitVote(p.id); } else { selected = p.id; render(); } }, `player ${myVote ? 'my-vote' : ''} ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
+    b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}${myVote ? ' คุณโหวตให้ผู้เล่นนี้แล้ว' : ''}`); b.setAttribute('aria-pressed', selected === p.id || myVote ? 'true' : 'false');
     b.append(text('span', String(p.seatIndex).padStart(2,'0'), 'seat'), text('span', myVote ? '✓' : roleVisible && state.phase !== 'lobby' ? roles[p.role].icon : !p.alive ? '✝' : ['☾','✧','♜','❖'][p.seatIndex % 4], myVote ? 'avatar vote-marker' : 'avatar'), text('b', `${p.name}${p.me ? ' (คุณ)' : ''}`));
     b.append(text('small', state.phase === 'lobby' ? !p.connected ? 'หลุดการเชื่อมต่อ' : p.ready ? 'พร้อมแล้ว' : 'กำลังเตรียมตัว' : roleVisible ? `${roles[p.role].name}${p.alive ? '' : ' · เสียชีวิต'}` : !p.alive ? 'ถูกกำจัด' : !p.connected ? 'หลุดการเชื่อมต่อ' : 'ยังมีชีวิต'));
     if (myVote) b.querySelector('.vote-marker').setAttribute('aria-label', 'คุณโหวตให้ผู้เล่นนี้แล้ว · เห็นเฉพาะคุณ');
@@ -112,9 +119,11 @@ function render() {
     if (state.host) actions.append(button('เริ่มคืนแรก →', () => send('start'), 'primary', state.players.length < 6 || state.players.length > 12 || !state.players.every(p => p.ready && p.connected)));
   } else if (state.phase === 'discussion' && state.host) actions.append(button('เปิดการลงคะแนน →', () => send('next', { gameId: state.gameId, phaseId: state.phaseId }), 'primary'));
   else if (state.phase === 'ended' && state.host) actions.append(button('เล่นอีกครั้ง ↻', () => send('rematch'), 'primary'));
-  else if (canAct()) {
+  else if (canAct() && isVoting()) {
+    actions.append(button('งดออกเสียง', () => submitVote('skip'), state.me.action === 'skip' ? 'secondary' : 'quiet'));
+  } else if (canAct()) {
     actions.append(button('ยืนยันเป้าหมาย →', submit, 'primary', !selected));
-    actions.append(button(['voting','runoff'].includes(state.phase) ? 'งดออกเสียง' : 'ข้ามความสามารถ', () => { selected = 'skip'; render(); }, selected === 'skip' ? 'secondary' : 'quiet'));
+    actions.append(button('ข้ามความสามารถ', () => { selected = 'skip'; render(); }, selected === 'skip' ? 'secondary' : 'quiet'));
   }
   const nameOf = id => id === 'skip' ? 'ข้าม / งดออกเสียง' : state.players.find(p => p.id === id)?.name || '';
   $('selection').textContent = selected ? `เป้าหมาย: ${nameOf(selected)} · กดยืนยันเพื่อส่ง` : state.me.action ? `✓ คำสั่งล่าสุด: ${nameOf(state.me.action)} · เปลี่ยนได้ก่อนหมดเวลา` : '';

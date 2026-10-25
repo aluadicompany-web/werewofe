@@ -8,7 +8,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   const pages = [], errors = [];
   for (let i = 0; i < 6; i++) {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true });
     const page = await context.newPage(); pages.push(page); page.on('pageerror', e => errors.push(e.message));
     await page.goto('http://127.0.0.1:3221'); await expect(page.locator('#connection')).toHaveText('เชื่อมต่อแล้ว');
     await page.locator('#name').fill(`ผู้ทดสอบ${i + 1}`);
@@ -18,20 +18,30 @@ try {
   }
   for (const p of pages) await p.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click();
   await pages[0].getByRole('button', { name: 'เริ่มคืนแรก →', exact: true }).click();
+  const assigned = [];
+  for (const p of pages) { await p.locator('#reveal').click(); assigned.push(await p.locator('#role-content h3').innerText()); }
+  const seer = assigned.findIndex(role => role.includes('ผู้หยั่งรู้'));
+  await expect(pages[seer].locator('#phase-title')).toHaveText('ค่ำคืนแห่งความลับ', { timeout: 10000 });
+  const nightTarget = seer === 0 ? 1 : 0;
+  await pages[seer].locator('.player').nth(nightTarget).click();
+  await expect(pages[seer].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true })).toBeEnabled();
+  await expect(pages[seer].locator('#selection')).toContainText('กดยืนยันเพื่อส่ง');
   await expect(pages[0].locator('#phase-title')).toHaveText('รุ่งเช้าแห่งความสงสัย', { timeout: 20000 });
   await pages[0].getByRole('button', { name: 'เปิดการลงคะแนน →', exact: true }).click();
   const seats = await pages[0].locator('.player').evaluateAll(cards => cards.map(c => c.dataset.seat));
   const card = (actor, target) => pages[actor].locator(`.player[data-seat="${seats[target]}"]`);
-  const confirm = actor => pages[actor].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true }).click();
-  const vote = async (actor, target) => { await card(actor, target).click(); await confirm(actor); await expect(card(actor, target).locator('.vote-marker')).toBeVisible(); };
-  await card(0, 2).click(); await expect(pages[0].locator('.vote-marker')).toHaveCount(0);
-  await confirm(0); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
+  const vote = async (actor, target) => { await card(actor, target).click(); await expect(card(actor, target).locator('.vote-marker')).toBeVisible(); };
+  await expect(pages[0].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true })).toHaveCount(0);
+  await card(0, 2).focus(); await card(0, 2).press('Enter'); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
   for (const p of pages.slice(1)) await expect(p.locator('.vote-marker')).toHaveCount(0);
-  await card(0, 3).click(); await expect(card(0, 2).locator('.vote-marker')).toBeVisible(); await expect(card(0, 3).locator('.vote-marker')).toHaveCount(0);
-  await confirm(0); await expect(card(0, 3).locator('.vote-marker')).toBeVisible(); await expect(card(0, 2).locator('.vote-marker')).toHaveCount(0);
+  await vote(0, 3); await expect(card(0, 2).locator('.vote-marker')).toHaveCount(0);
   await vote(1, 4); await expect(card(0, 3).locator('.vote-marker')).toBeVisible(); await expect(card(1, 3).locator('.vote-marker')).toHaveCount(0);
-  await pages[0].getByRole('button', { name: 'งดออกเสียง', exact: true }).click(); await confirm(0); await expect(pages[0].locator('.vote-marker')).toHaveCount(0);
-  await vote(0, 2); await vote(1, 3);
+  await pages[0].getByRole('button', { name: 'งดออกเสียง', exact: true }).click(); await expect(pages[0].locator('.vote-marker')).toHaveCount(0);
+  // Rapid clicks must retain the latest target while earlier acknowledgements are pending.
+  await card(0, 3).evaluate(e => e.click()); await card(0, 2).evaluate(e => e.click()); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
+  await vote(1, 3);
+  for (const p of pages.slice(2)) { await p.getByRole('button', { name: 'งดออกเสียง', exact: true }).click(); await expect(p.locator('#selection')).toContainText('ข้าม / งดออกเสียง'); }
+  await expect(pages[0].locator('#phase-title')).toHaveText('ใครคือมนุษย์หมาป่า?');
   await pages[0].reload(); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
   await mkdir('test-results/vote-privacy', { recursive: true });
   await pages[0].screenshot({ path: 'test-results/vote-privacy/voter-desktop.png', fullPage: true });
@@ -39,9 +49,11 @@ try {
   await pages[0].setViewportSize({ width: 390, height: 844 }); await pages[0].screenshot({ path: 'test-results/vote-privacy/voter-mobile.png', fullPage: true });
   await expect(pages[0].locator('#phase-title')).toHaveText('โหวตรอบสอง · ผู้ที่คะแนนเสมอ', { timeout: 15000 });
   for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
-  await vote(0, 2); for (const p of pages.slice(1)) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  await card(0, 2).tap(); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
+  await expect(pages[0].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true })).toHaveCount(0);
+  for (const p of pages.slice(1)) await expect(p.locator('.vote-marker')).toHaveCount(0);
   await expect(pages[0].locator('#phase-title')).toHaveText('คำตัดสินของหมู่บ้าน', { timeout: 15000 });
   for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
   if (errors.length) throw Error(errors.join('\n'));
-  console.log('PASS: six browser clients; private confirmed-vote marker; preview vs confirmation; change target; abstain; reconnect; independent voters; runoff reset; marker removed after voting; desktop/mobile screenshots; no page errors.');
+  console.log('PASS: six browser clients; night ability still requires confirmation; one-click/keyboard/touch votes; no confirmation; private marker; latest rapid click; tally waits for deadline; change target; abstain; reconnect; independent voters; runoff reset; marker removed after voting; desktop/mobile screenshots; no page errors.');
 } finally { await browser?.close(); server.kill(); }
