@@ -168,7 +168,7 @@ export function view(r, actor) {
     preset: CLASSIC_PRESETS[r.players.length] || null, round: r.round, deadline: r.deadline, winner: r.winner, host: r.host === actor,
     runoff: r.runoff, hunter: r.players.find(p => p.id === r.reaction)?.seat || null,
     players: r.players.map(p => ({ id: p.seat, seatIndex: p.seatIndex, name: p.name, connected: p.connected, ready: p.ready, alive: p.alive,
-      me: p === me, host: r.host === p.id, role: roleOf(p), voted: Boolean(r.votes[p.id]) })),
+      me: p === me, host: r.host === p.id, role: roleOf(p) })),
     me: me ? { role: me.role, alive: me.alive, ready: me.ready, visions: me.visions, lastDoctor: me.lastDoctor,
       armor: me.role === 'elder' ? me.armor : null, canReact: r.reaction === me.id,
       action: r.actions[actor] || r.votes[actor] || null } : null,

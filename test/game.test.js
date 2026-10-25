@@ -90,3 +90,12 @@ test('seeded headless regressions finish games for every preset without duplicat
   assert.ok(r.winner,`stalled preset ${n}`);const deaths=r.events.filter(e=>e.kind==='death').map(e=>e.payload.seat);assert.equal(new Set(deaths).size,deaths.length);
  }
 });
+
+test('day vote target is private to voter, updates on change/abstain, and resets for runoff',()=>{
+ const r=fixed();toVote(r);const [voter,other,target]=r.players;
+ action(r,voter,target);assert.equal(view(r,voter.id).me.action,target.seat);assert.equal(view(r,other.id).me.action,null);
+ assert.ok(view(r,other.id).players.every(p=>!('voted'in p)));assert.ok(!('votes'in view(r,other.id)));
+ action(r,voter,other);assert.equal(view(r,voter.id).me.action,other.seat);action(r,voter,'skip');assert.equal(view(r,voter.id).me.action,'skip');
+ action(r,voter,target);action(r,other,voter);advance(r);assert.equal(r.phase,'runoff');assert.equal(view(r,voter.id).me.action,null);
+ action(r,voter,target);assert.equal(view(r,voter.id).me.action,target.seat);assert.equal(view(r,other.id).me.action,null);
+});

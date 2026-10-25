@@ -15,3 +15,5 @@
 .lobby-settings{margin-top:20px;padding:14px;border:1px solid var(--line);border-radius:6px;background:#ffffff03}.lobby-settings label{font-size:12px;color:var(--gold);margin-right:12px}.lobby-settings select{font:inherit;font-size:12px;padding:9px;border-radius:4px;border:1px solid var(--line);color:var(--ink);background:#182322;max-width:100%}.lobby-settings p{margin-top:10px;font-size:11px}.room-code{flex-wrap:wrap}@media(max-width:720px){.room-code{gap:2px}.room-code #copy-link{width:100%;padding-left:0;text-align:left}.room-bar{align-items:flex-start}.lobby-settings label{display:block;margin-bottom:8px}}
 
 button:disabled:not(.player){opacity:.75;color:#c0c7ba}.primary:disabled{background:#344035;border-color:#52604b}
+
+.player.my-vote{border-color:var(--green);background:linear-gradient(#314638,#1c3028)}.player .vote-marker{font-size:32px;line-height:1;font-weight:700;color:#e0f1d3;border:2px solid var(--green);background:#203e2d;box-shadow:0 0 18px #89ac9522}.player.my-vote.selected{border-color:var(--gold)}

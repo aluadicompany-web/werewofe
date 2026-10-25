@@ -9,7 +9,8 @@
     "test": "node --test",
     "check": "node scripts/check.mjs",
     "test:browser": "node e2e/playtest.mjs",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test:vote": "node e2e/vote-privacy.mjs"
   },
   "engines": {
     "node": ">=22"

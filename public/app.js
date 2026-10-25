@@ -91,12 +91,14 @@ function render() {
   $('preset-info').textContent = preset ? Object.entries(preset).map(([role,count]) => `${roles[role].name} ${count}`).join(' · ') + (state.players.length < 8 ? ' · Quick/Casual ไม่มีจัดอันดับ' : ' · Casual ไม่มีจัดอันดับ') : 'เมื่อครบ 6–12 คน จะแสดงชุดบทบาท Classic ตามจำนวนผู้เล่น';
   const board = $('players'); board.replaceChildren();
   state.players.forEach(p => {
+    const myVote = ['voting','runoff'].includes(state.phase) && state.me.action === p.id;
     const can = eligible(p), roleVisible = p.role && (!p.me || reveal || finished() || !p.alive);
-    const b = button('', () => { selected = p.id; render(); }, `player ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
-    b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}`); b.setAttribute('aria-pressed', selected === p.id ? 'true' : 'false');
-    b.append(text('span', String(p.seatIndex).padStart(2,'0'), 'seat'), text('span', roleVisible && state.phase !== 'lobby' ? roles[p.role].icon : !p.alive ? '✝' : ['☾','✧','♜','❖'][p.seatIndex % 4], 'avatar'), text('b', `${p.name}${p.me ? ' (คุณ)' : ''}`));
+    const b = button('', () => { selected = p.id; render(); }, `player ${myVote ? 'my-vote' : ''} ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
+    b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}${myVote ? ' คุณโหวตให้ผู้เล่นนี้แล้ว' : ''}`); b.setAttribute('aria-pressed', selected === p.id ? 'true' : 'false');
+    b.append(text('span', String(p.seatIndex).padStart(2,'0'), 'seat'), text('span', myVote ? '✓' : roleVisible && state.phase !== 'lobby' ? roles[p.role].icon : !p.alive ? '✝' : ['☾','✧','♜','❖'][p.seatIndex % 4], myVote ? 'avatar vote-marker' : 'avatar'), text('b', `${p.name}${p.me ? ' (คุณ)' : ''}`));
     b.append(text('small', state.phase === 'lobby' ? !p.connected ? 'หลุดการเชื่อมต่อ' : p.ready ? 'พร้อมแล้ว' : 'กำลังเตรียมตัว' : roleVisible ? `${roles[p.role].name}${p.alive ? '' : ' · เสียชีวิต'}` : !p.alive ? 'ถูกกำจัด' : !p.connected ? 'หลุดการเชื่อมต่อ' : 'ยังมีชีวิต'));
-    if (p.host || p.ready && state.phase === 'lobby' || p.voted) b.append(text('span', p.voted ? '✓ โหวต' : p.host ? '♔' : '✓', 'check'));
+    if (myVote) b.querySelector('.vote-marker').setAttribute('aria-label', 'คุณโหวตให้ผู้เล่นนี้แล้ว · เห็นเฉพาะคุณ');
+    if (p.host || p.ready && state.phase === 'lobby') b.append(text('span', p.host ? '♔' : '✓', 'check'));
     board.append(b);
   });
   if (state.phase === 'lobby') for (let i = state.players.length; i < 6; i++) { const e = text('div', '', 'player empty'); e.append(text('span', '+', 'avatar'),text('small','รอเพื่อนเข้าร่วม')); board.append(e); }

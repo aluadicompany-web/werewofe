@@ -1,0 +1,47 @@
+import { chromium, expect } from '@playwright/test';
+import { spawn } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
+const server = spawn(process.execPath, ['server/index.js'], { env: { ...process.env, PORT: '3221', NODE_ENV: 'test', GAME_TIMER_SCALE: '0.4' }, stdio: ['ignore', 'pipe', 'pipe'] });
+let browser;
+try {
+  await new Promise((resolve, reject) => { server.stdout.once('data', resolve); server.once('error', reject); server.once('exit', () => reject(Error('Test server exited'))); });
+  browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
+  const pages = [], errors = [];
+  for (let i = 0; i < 6; i++) {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage(); pages.push(page); page.on('pageerror', e => errors.push(e.message));
+    await page.goto('http://127.0.0.1:3221'); await expect(page.locator('#connection')).toHaveText('เชื่อมต่อแล้ว');
+    await page.locator('#name').fill(`ผู้ทดสอบ${i + 1}`);
+    if (i === 0) { await page.locator('#create').click(); await expect(page.locator('#game')).toBeVisible(); await page.locator('#timing').selectOption('quick'); }
+    else { await page.locator('#code').fill(await pages[0].locator('#room-code').innerText()); await page.locator('#join').click(); }
+    await expect(page.locator('#game')).toBeVisible();
+  }
+  for (const p of pages) await p.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click();
+  await pages[0].getByRole('button', { name: 'เริ่มคืนแรก →', exact: true }).click();
+  await expect(pages[0].locator('#phase-title')).toHaveText('รุ่งเช้าแห่งความสงสัย', { timeout: 20000 });
+  await pages[0].getByRole('button', { name: 'เปิดการลงคะแนน →', exact: true }).click();
+  const seats = await pages[0].locator('.player').evaluateAll(cards => cards.map(c => c.dataset.seat));
+  const card = (actor, target) => pages[actor].locator(`.player[data-seat="${seats[target]}"]`);
+  const confirm = actor => pages[actor].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true }).click();
+  const vote = async (actor, target) => { await card(actor, target).click(); await confirm(actor); await expect(card(actor, target).locator('.vote-marker')).toBeVisible(); };
+  await card(0, 2).click(); await expect(pages[0].locator('.vote-marker')).toHaveCount(0);
+  await confirm(0); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
+  for (const p of pages.slice(1)) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  await card(0, 3).click(); await expect(card(0, 2).locator('.vote-marker')).toBeVisible(); await expect(card(0, 3).locator('.vote-marker')).toHaveCount(0);
+  await confirm(0); await expect(card(0, 3).locator('.vote-marker')).toBeVisible(); await expect(card(0, 2).locator('.vote-marker')).toHaveCount(0);
+  await vote(1, 4); await expect(card(0, 3).locator('.vote-marker')).toBeVisible(); await expect(card(1, 3).locator('.vote-marker')).toHaveCount(0);
+  await pages[0].getByRole('button', { name: 'งดออกเสียง', exact: true }).click(); await confirm(0); await expect(pages[0].locator('.vote-marker')).toHaveCount(0);
+  await vote(0, 2); await vote(1, 3);
+  await pages[0].reload(); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
+  await mkdir('test-results/vote-privacy', { recursive: true });
+  await pages[0].screenshot({ path: 'test-results/vote-privacy/voter-desktop.png', fullPage: true });
+  await pages[2].screenshot({ path: 'test-results/vote-privacy/other-player-desktop.png', fullPage: true });
+  await pages[0].setViewportSize({ width: 390, height: 844 }); await pages[0].screenshot({ path: 'test-results/vote-privacy/voter-mobile.png', fullPage: true });
+  await expect(pages[0].locator('#phase-title')).toHaveText('โหวตรอบสอง · ผู้ที่คะแนนเสมอ', { timeout: 15000 });
+  for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  await vote(0, 2); for (const p of pages.slice(1)) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  await expect(pages[0].locator('#phase-title')).toHaveText('คำตัดสินของหมู่บ้าน', { timeout: 15000 });
+  for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  if (errors.length) throw Error(errors.join('\n'));
+  console.log('PASS: six browser clients; private confirmed-vote marker; preview vs confirmation; change target; abstain; reconnect; independent voters; runoff reset; marker removed after voting; desktop/mobile screenshots; no page errors.');
+} finally { await browser?.close(); server.kill(); }
