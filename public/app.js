@@ -16,7 +16,7 @@ function send(event, data = {}) {
   });
 }
 function saveSession(value) { session = value; try { if (value) sessionStorage.setItem('moonfall', JSON.stringify(value)); else sessionStorage.removeItem('moonfall'); } catch { toast('เบราว์เซอร์ไม่อนุญาตให้จำที่นั่งเมื่อรีเฟรช'); } }
-function showLanding() { state = null; selected = null; reveal = false; $('game').hidden = true; $('landing').hidden = false; }
+function showLanding() { state = null; selected = null; reveal = false; $('game').hidden = true; $('landing').hidden = false; $('gm-open').hidden = false; }
 socket.on('connect', () => {
   $('connection').textContent = 'เชื่อมต่อแล้ว'; $('connection').classList.remove('offline');
   if (session) socket.timeout(8000).emit('enter', session, (err, result) => {
@@ -27,6 +27,7 @@ socket.on('connect', () => {
 });
 const offline = () => { $('connection').textContent = 'กำลังเชื่อมต่อเซิร์ฟเวอร์'; $('connection').classList.add('offline'); };
 socket.on('disconnect', offline); socket.on('connect_error', offline);
+socket.on('room_closed', () => { saveSession(null); showLanding(); toast('GM ปิดห้องทดสอบแล้ว'); });
 socket.on('replaced', () => { saveSession(null); showLanding(); toast('ที่นั่งนี้ถูกเปิดจากอีกหน้าต่าง กรุณาใช้แท็บล่าสุด'); });
 socket.on('state', next => { state = next; if (lastPhase !== next.phaseId) { selected = null; if (next.phase === 'lobby') reveal = false; lastPhase = next.phaseId; } render(); });
 async function enter(create) {
@@ -41,12 +42,26 @@ $('name').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.isComposing && $('code').value.trim()) { e.preventDefault(); enter(false); }
 });
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); enter(false); } });
+$('gm-open').onclick = () => { $('gm-name').value = $('name').value.trim() || 'GM'; $('gm-dialog').showModal(); };
+$('gm-close').onclick = () => $('gm-dialog').close();
+$('gm-dialog').addEventListener('close', () => { $('gm-key').value = ''; });
+$('gm-form').onsubmit = async e => {
+  e.preventDefault(); if (busy) return;
+  busy = true; $('gm-create').disabled = true;
+  const name = $('gm-name').value.trim();
+  const payload = { create: true, testRoom: true, name, gmKey: $('gm-key').value };
+  $('gm-key').value = '';
+  const res = await send('enter', payload); payload.gmKey = '';
+  busy = false; $('gm-create').disabled = false;
+  if (res) { saveSession({ name, token: res.token, code: res.code }); $('gm-dialog').close(); toast('สร้างห้องทดสอบ GM แล้ว'); }
+};
+$('gm-reveal').onchange = () => render();
 $('help').onclick = () => $('rules').showModal(); $('close-rules').onclick = () => $('rules').close();
 document.addEventListener('keydown', e => { if (e.key === '?' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { e.preventDefault(); if (!$('rules').open) $('rules').showModal(); } });
 async function copy(value, success) { try { await navigator.clipboard.writeText(value); toast(success); } catch { toast(value); } }
 $('copy').onclick = () => copy(state.code, 'คัดลอกรหัสห้องแล้ว');
 $('copy-link').onclick = () => { const url = new URL(location.href); url.search = ''; url.hash = ''; url.searchParams.set('room', state.code); copy(url.href, 'คัดลอกลิงก์เชิญแล้ว เพียงเปิดลิงก์และกรอกชื่อ'); };
-$('leave').onclick = async () => { if (!confirm('ออกจากห้อง? ระหว่างเกมจะเสียสิทธิ์กลับเข้าที่นั่งนี้')) return; if (await send('leave')) { saveSession(null); showLanding(); } };
+$('leave').onclick = async () => { if (!confirm(state?.gm ? 'ปิดห้องทดสอบนี้? ผู้เล่นทุกคนจะออกจากห้อง' : 'ออกจากห้อง? ระหว่างเกมจะเสียสิทธิ์กลับเข้าที่นั่งนี้')) return; if (await send('leave')) { saveSession(null); showLanding(); } };
 $('reveal').onclick = () => { reveal = true; render(); };
 $('timing').onchange = () => send('settings', { timing: $('timing').value });
 $('chat-form').onsubmit = async e => { e.preventDefault(); const input = $('chat-input'); const value = input.value.trim(); if (!value) return; const res = await send('chat', { text: value, channel: state.phase === 'night' ? 'wolves' : 'village' }); if (res && input.value.trim() === value) input.value = ''; };
@@ -75,12 +90,15 @@ async function submit() {
 }
 function render() {
   if (!state) return; const focusSeat = document.activeElement?.dataset.seat; $('landing').hidden = true; $('game').hidden = false;
+  $('game').dataset.phase = state.phase; $('game').dataset.phaseId = state.phaseId;
   $('room-code').textContent = state.code;
   const live = state.players.filter(p => p.alive).length;
+  $('leave').textContent = state.gm ? 'ปิดห้อง GM →' : 'ออกจากห้อง →';
   $('population').textContent = state.phase === 'lobby' ? `${state.players.length} / 12 คน · ขั้นต่ำ 6` : `รอดชีวิต ${live} / ${state.players.length} คน`;
   const victory = state.winner === 'draw' ? 'ไม่มีผู้รอดชีวิต · เสมอ' : state.winner === 'wolf' ? 'ฝูงหมาป่าเป็นฝ่ายชนะ' : 'หมู่บ้านเป็นฝ่ายชนะ';
   const labels = { lobby: 'ล้อมวงรอเพื่อน', role_reveal: 'เปิดดูบทบาทลับของคุณ', night: 'ค่ำคืนแห่งความลับ', announcement: 'ข่าวสารยามรุ่งเช้า', discussion: 'รุ่งเช้าแห่งความสงสัย', voting: 'ใครคือมนุษย์หมาป่า?', runoff: 'โหวตรอบสอง · ผู้ที่คะแนนเสมอ', execution: 'คำตัดสินของหมู่บ้าน', hunter_reaction: 'กระสุนนัดสุดท้ายของนายพราน', result: victory, ended: victory };
   $('round-label').textContent = state.phase === 'lobby' ? 'CLASSIC · 6–12 PLAYERS' : `CLASSIC · ROUND ${String(state.round).padStart(2,'0')} · ${state.phase === 'night' ? 'NIGHT' : 'DAY'}`;
+  if (state.testRoom) $('round-label').textContent = 'GM TEST · ' + $('round-label').textContent;
   $('phase-title').textContent = labels[state.phase];
   let hint = {
     lobby: 'แชร์ลิงก์เชิญให้เพื่อน ทุกคนกดพร้อม แล้วเจ้าของห้องเริ่มเกม (6–12 คน)',
@@ -102,11 +120,13 @@ function render() {
   const board = $('players'); board.replaceChildren();
   state.players.forEach(p => {
     const myVote = ['voting','runoff'].includes(state.phase) && state.me.action === p.id;
-    const can = eligible(p), roleVisible = p.role && (!p.me || reveal || finished() || !p.alive);
+    const gmPlayer = state.gm && $('gm-reveal').checked ? state.gmState?.players.find(x => x.id === p.id) : null;
+    const shownRole = gmPlayer?.role || p.role;
+    const can = eligible(p), roleVisible = Boolean(gmPlayer?.role) || p.role && (!p.me || reveal || finished() || !p.alive);
     const b = button('', () => { if (isVoting()) { submitVote(p.id); } else { selected = p.id; render(); } }, `player ${myVote ? 'my-vote' : ''} ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
     b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}${myVote ? ' คุณโหวตให้ผู้เล่นนี้แล้ว' : ''}`); b.setAttribute('aria-pressed', selected === p.id || myVote ? 'true' : 'false');
-    b.append(text('span', String(p.seatIndex).padStart(2,'0'), 'seat'), text('span', myVote ? '✓' : roleVisible && state.phase !== 'lobby' ? roles[p.role].icon : !p.alive ? '✝' : ['☾','✧','♜','❖'][p.seatIndex % 4], myVote ? 'avatar vote-marker' : 'avatar'), text('b', `${p.name}${p.me ? ' (คุณ)' : ''}`));
-    b.append(text('small', state.phase === 'lobby' ? !p.connected ? 'หลุดการเชื่อมต่อ' : p.ready ? 'พร้อมแล้ว' : 'กำลังเตรียมตัว' : roleVisible ? `${roles[p.role].name}${p.alive ? '' : ' · เสียชีวิต'}` : !p.alive ? 'ถูกกำจัด' : !p.connected ? 'หลุดการเชื่อมต่อ' : 'ยังมีชีวิต'));
+    b.append(text('span', String(p.seatIndex).padStart(2,'0'), 'seat'), text('span', myVote ? '✓' : roleVisible && state.phase !== 'lobby' ? roles[shownRole].icon : !p.alive ? '✝' : ['☾','✧','♜','❖'][p.seatIndex % 4], myVote ? 'avatar vote-marker' : 'avatar'), text('b', `${p.bot ? '🤖 ' : ''}${p.name}${p.me ? ' (คุณ)' : ''}`));
+    b.append(text('small', state.phase === 'lobby' ? !p.connected ? 'หลุดการเชื่อมต่อ' : p.ready ? 'พร้อมแล้ว' : 'กำลังเตรียมตัว' : roleVisible ? `${roles[shownRole].name}${p.alive ? '' : ' · เสียชีวิต'}` : !p.alive ? 'ถูกกำจัด' : !p.connected ? 'หลุดการเชื่อมต่อ' : 'ยังมีชีวิต'));
     if (myVote) b.querySelector('.vote-marker').setAttribute('aria-label', 'คุณโหวตให้ผู้เล่นนี้แล้ว · เห็นเฉพาะคุณ');
     if (p.host || p.ready && state.phase === 'lobby') b.append(text('span', p.host ? '♔' : '✓', 'check'));
     board.append(b);
@@ -130,8 +150,39 @@ function render() {
   $('log').replaceChildren(...(state.log.length ? state.log : ['คืนที่เงียบสงบ… กำลังรอทุกคนเข้าหมู่บ้าน']).map(line => text('li', line)));
   $('wolf-info').hidden = !state.wolfActions.length;
   $('wolf-info').textContent = 'แผนของฝูง: ' + state.wolfActions.map(a => `${a.name} → ${a.target ? nameOf(a.target) : 'ยังไม่เลือก'}`).join(' · ') + ' | หากคะแนนเสมอ จะโจมตีเป้าหมายที่เลขที่นั่งน้อยที่สุด';
-  renderRole(); renderChat(); tick();
+  renderGM(); renderRole(); renderChat(); tick();
   if (focusSeat) [...board.children].find(b => b.dataset.seat === focusSeat && !b.disabled)?.focus({ preventScroll: true });
+}
+function renderGM() {
+  $('gm-panel').hidden = !state.gm;
+  $('gm-open').hidden = Boolean(state);
+  if (!state.gm) { $('gm-debug').replaceChildren(); return; }
+  const controls = $('gm-controls'); controls.replaceChildren();
+  const command = (event, data = {}) => send(event, data);
+  if (state.phase === 'lobby') {
+    controls.append(button('+ บอท 1 ตัว', () => command('gm_bots', { operation: 'add' }), 'secondary', state.players.length >= 12));
+    for (const total of [6, 12]) controls.append(button(`เติมบอทให้ครบ ${total} คน`, () => command('gm_bots', { operation: 'fill', total }), 'secondary', state.players.length >= total));
+    controls.append(button('ลบบอททั้งหมด', () => command('gm_bots', { operation: 'clear' }), 'quiet', !state.players.some(p => p.bot)));
+    const label = text('label', 'ความเร็วทดสอบ '), speed = document.createElement('select'); speed.id = 'gm-speed'; speed.setAttribute('aria-label', 'ความเร็วห้องทดสอบ');
+    for (const n of [1, 5, 20]) { const option = text('option', `${n} เท่า`); option.value = n; speed.append(option); }
+    speed.value = state.gmState.speed; speed.onchange = () => command('gm_speed', { speed: Number(speed.value) }); label.append(speed); controls.append(label);
+  } else {
+    const meta = { gameId: state.gameId, phaseId: state.phaseId };
+    controls.append(button('ให้บอทส่งคำสั่งตอนนี้', () => command('gm_bots_now', meta), 'secondary', !state.deadline));
+    controls.append(button('จบช่วงนี้ →', () => command('gm_step', meta), 'primary', !state.deadline));
+    controls.append(button('รีเซ็ตกลับห้องรอ', () => { if (confirm('หยุดแมตช์ทดสอบและกลับห้องรอ?')) command('gm_reset'); }, 'quiet danger'));
+  }
+  const debug = $('gm-debug'); debug.hidden = !$('gm-reveal').checked; debug.replaceChildren();
+  if (!debug.hidden && state.gmState) {
+    const table = document.createElement('table'); const head = document.createElement('tr');
+    for (const name of ['ผู้เล่น', 'บทบาท', 'คำสั่งล่าสุด']) head.append(text('th', name)); table.append(head);
+    for (const p of state.players) {
+      const info = state.gmState.players.find(x => x.id === p.id); const row = document.createElement('tr');
+      const target = info.action === 'skip' ? 'ข้าม / งดออกเสียง' : state.players.find(x => x.id === info.action)?.name || 'ยังไม่ส่ง';
+      for (const value of [p.name, roles[info.role]?.name || 'ยังไม่แจก', target]) row.append(text('td', value)); table.append(row);
+    }
+    debug.append(table);
+  }
 }
 function renderRole() {
   const content = $('role-content'); content.replaceChildren(); const lobby = state.phase === 'lobby';

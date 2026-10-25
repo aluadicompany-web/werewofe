@@ -58,3 +58,7 @@ Netlify deploy preview มี origin คนละตัวกับเว็บ�
 - ลองแมตช์ 6 และ 12 คนจนจบ ตรวจแชตลับและบทบาทที่ไม่ควรเห็น
 - รีเฟรชแท็บเดิมเพื่อกลับที่นั่งเดิม และปล่อยผู้เล่น AFK ให้ timer เดินต่อ
 - ตรวจ HTTPS และ WebSocket ใน browser network; หากไม่เชื่อมให้ตรวจ `PUBLIC_GAME_SERVER_URL`, `ALLOWED_ORIGINS`, service health และ Render logs
+
+## เปิดห้อง GM (ตัวเลือกเพิ่มเติม)
+
+ตั้ง `GM_ADMIN_KEY` ที่ Render → moonfall-realtime → Environment เท่านั้น ใช้รหัสลับ 24–256 ตัวอักษรแล้ว Save/redeploy ไม่ต้องตั้งบน Netlify และไม่ต้องแก้ `render.yaml` เพื่อเปิด ห้องปกติจะยังทำงานเมื่อไม่ได้ตั้งค่า GM ดู [GM-ROOM.md](GM-ROOM.md)

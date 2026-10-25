@@ -12,7 +12,8 @@
     "build": "node scripts/build.mjs",
     "test:vote": "node e2e/vote-privacy.mjs",
     "test:lobby": "node e2e/lobby-recovery.mjs",
-    "test:hunter": "node e2e/hunter-flow.mjs"
+    "test:hunter": "node e2e/hunter-flow.mjs",
+    "test:gm": "node e2e/gm-room.mjs"
   },
   "engines": {
     "node": ">=22"

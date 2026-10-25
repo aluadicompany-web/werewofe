@@ -6,6 +6,7 @@ const alive = r => r.players.filter(p => p.alive);
 const wolves = p => ROLES[p.role]?.team === 'wolf';
 export function room(code, name, token, options = {}) {
   const r = { code, host: token, phase: 'lobby', phaseId: randomUUID(), gameId: null, round: 0,
+    isTest: Boolean(options.isTest), gmId: options.isTest ? token : null, testSpeed: 1, baseTimerScale: options.timerScale || 1,
     mode: 'classic', timing: 'standard', timerScale: options.timerScale || 1, players: [], actions: {}, votes: {},
     messages: [], log: [], events: [], receipts: {}, deadline: null, winner: null, runoff: [], pending: null, reaction: null };
   join(r, name, token); return r;
@@ -25,7 +26,7 @@ function audit(r, kind, payload, visibility = 'server') {
 export function configure(r, actor, timing) {
   if (r.host !== actor || r.phase !== 'lobby') fail('เฉพาะเจ้าของห้องตั้งค่าในห้องรอได้');
   if (!Object.hasOwn(TIMINGS, timing)) fail('รูปแบบเวลาไม่ถูกต้อง');
-  r.timing = timing; r.players.forEach(p => p.ready = false);
+  r.timing = timing; r.players.forEach(p => p.ready = Boolean(p.isBot));
 }
 export function start(r, actor) {
   if (r.host !== actor) fail('เฉพาะเจ้าของห้องเริ่มเกมได้');
@@ -46,7 +47,7 @@ function setPhase(r, phase) {
   const timing = TIMINGS[r.timing];
   const ms = { ...timing, role_reveal: 5000, announcement: timing.result, execution: timing.result,
     hunter_reaction: 15000, runoff: 20000, result: timing.result }[phase];
-  r.phase = phase; r.phaseId = randomUUID(); r.deadline = ms ? Date.now() + Math.max(50, ms * r.timerScale) : null;
+  r.phaseStartedAt = Date.now(); r.phase = phase; r.phaseId = randomUUID(); r.deadline = ms ? Date.now() + Math.max(50, ms * r.timerScale) : null;
   r.actions = {}; r.votes = {};
   audit(r, 'phase_changed', { phase, phaseId: r.phaseId }, 'public');
 }
@@ -164,14 +165,21 @@ export function act(r, actor, payload) {
 export function view(r, actor) {
   const me = r.players.find(p => p.id === actor), finished = ['result', 'ended'].includes(r.phase);
   const roleOf = p => finished || p.revealed || p === me || (wolves(me || {}) && wolves(p)) ? p.role : null;
-  return { code: r.code, gameId: r.gameId, phaseId: r.phaseId, phase: r.phase, mode: r.mode, timing: r.timing,
+  return { code: r.code, testRoom: Boolean(r.isTest), gm: Boolean(r.isTest && r.gmId === actor), gameId: r.gameId, phaseId: r.phaseId, phase: r.phase, mode: r.mode, timing: r.timing,
     preset: CLASSIC_PRESETS[r.players.length] || null, round: r.round, deadline: r.deadline, winner: r.winner, host: r.host === actor,
     runoff: r.runoff, hunter: r.players.find(p => p.id === r.reaction)?.seat || null,
-    players: r.players.map(p => ({ id: p.seat, seatIndex: p.seatIndex, name: p.name, connected: p.connected, ready: p.ready, alive: p.alive,
+    players: r.players.map(p => ({ id: p.seat, seatIndex: p.seatIndex, name: p.name, bot: Boolean(p.isBot), connected: p.connected, ready: p.ready, alive: p.alive,
       me: p === me, host: r.host === p.id, role: roleOf(p) })),
     me: me ? { role: me.role, alive: me.alive, ready: me.ready, visions: me.visions, lastDoctor: me.lastDoctor,
       armor: me.role === 'elder' ? me.armor : null, canReact: r.reaction === me.id,
       action: r.actions[actor] || r.votes[actor] || null } : null,
     wolfActions: wolves(me || {}) && r.phase === 'night' ? alive(r).filter(wolves).map(p => ({ name: p.name, target: r.actions[p.id] || null })) : [],
     log: r.log.slice(-60), messages: r.messages.filter(m => m.channel === 'village' || (m.channel === 'wolves' && wolves(me || {}))).slice(-100) };
+}
+
+export function resetToLobby(r) {
+  r.players = r.players.filter(p => p.connected || p.isBot || p.id === r.gmId);
+  r.phase = 'lobby'; r.phaseId = randomUUID(); r.gameId = null; r.winner = null; r.deadline = null; r.round = 0;
+  r.actions = {}; r.votes = {}; r.receipts = {}; r.messages = []; r.log = []; r.events = []; r.pending = null; r.reaction = null; r.runoff = [];
+  r.players.forEach(p => { p.ready = Boolean(p.isBot); p.role = null; p.alive = true; p.visions = []; p.lastDoctor = null; p.revealed = false; p.hunterUsed = false; p.armor = 1; });
 }
