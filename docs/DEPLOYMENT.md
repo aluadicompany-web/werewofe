@@ -1,6 +1,6 @@
 # เผยแพร่ MOONFALL ด้วย Netlify + Render
 
-สถานะ: เตรียมไฟล์และทดสอบการแยก frontend/backend ในเครื่องแล้ว ยังไม่ได้สร้างบริการในบัญชี Netlify/Render หรือเผยแพร่ลิงก์จริง ไม่มีการสร้างทรัพยากรหรือเรียกเก็บเงินผ่านงานนี้
+ผู้ใช้สร้างบริการ Netlify และ Render แล้ว: หน้าเว็บ `https://effulgent-alfajores-8367b8.netlify.app`, backend `https://moonfall-realtime.onrender.com` ตรวจ backend health และการอนุญาต Netlify origin นี้สำเร็จแล้ว ต้องตรวจสถานะ production deploy ของหน้าเว็บหลัง push ล่าสุดอีกครั้ง ไม่มีการสร้างทรัพยากรหรือเรียกเก็บเงินผ่านเครื่องมือในงานนี้
 
 ## สถาปัตยกรรม
 
@@ -21,7 +21,7 @@ Netlify โฮสต์ HTML, CSS, JS, ฟอนต์ และ Socket.IO clien
 2. ที่ Render เลือกสร้าง Blueprint จาก repository นี้ ใช้ `render.yaml` (หรือ Web Service แบบ Node ตามค่าด้านล่าง) ไฟล์ตั้ง `plan: free`, `numInstances: 1` เพื่อทดลองใช้งาน ไม่ได้สั่งเปิดบริการจริงจาก workspace
 3. Render จะให้กรอก `ALLOWED_ORIGINS` ระหว่างสร้าง Blueprint หากยังไม่มี URL Netlify ให้ตั้งชั่วคราวเป็น `https://not-configured.invalid` เพื่อไม่อนุญาตเบราว์เซอร์ใดจนกว่าจะรู้ URL จริง เมื่อ service พร้อม จด URL HTTPS เช่น `https://your-service.onrender.com` และตรวจ `/health` ต้องได้ `ok: true`, `minPlayers: 6`, `maxPlayers: 12`
 4. ที่ Netlify เลือก Import from Git แล้วเชื่อม repository เดียวกัน Base directory เป็นราก repository, Build command `npm run build`, Publish directory `dist` (อยู่ใน `netlify.toml` แล้ว)
-5. ก่อน build ตั้ง Environment variable **`PUBLIC_GAME_SERVER_URL`** เป็น URL HTTPS ของ Render จากขั้นที่ 3 ไม่มี path, token หรือ credentials เช่น `https://your-service.onrender.com` แล้ว deploy Netlify หากลืมตั้ง build จะหยุดพร้อมข้อความชัดเจน
+5. สำหรับบริการปัจจุบัน `netlify.toml` กำหนด **`PUBLIC_GAME_SERVER_URL`** เป็น `https://moonfall-realtime.onrender.com` ไว้แล้ว Netlify จะใช้ค่านี้เมื่อ build หากนำไป deploy เป็นชุดใหม่ ให้แก้ค่านี้หรือตั้ง Environment variable ใน Netlify เป็น HTTPS origin ของ Render ของคุณ ไม่มี path, token หรือ credentials หากไม่มีค่า build จะหยุดพร้อมข้อความชัดเจน
 6. เมื่อ Netlify ให้ URL จริง เช่น `https://your-site.netlify.app` ให้กลับไป Render แทนค่า **`ALLOWED_ORIGINS`** ด้วย URL นี้แบบตรงตัว ไม่มี `/` ท้าย แล้ว redeploy Render สามารถระบุหลาย origin ที่เชื่อถือได้คั่นด้วย comma ไม่รองรับ wildcard หากเปลี่ยนชื่อเว็บหรือเพิ่ม custom domain ต้องอัปเดตค่านี้ด้วย
 7. เปิด URL Netlify สร้างห้อง กด “ลิงก์เชิญ” ส่งให้เพื่อน ผู้รับเปิดลิงก์ กรอกชื่อและเข้าร่วม ทุกคนเชื่อมเซิร์ฟเวอร์เดียวกัน ต้องมี 6–12 คนและพร้อมทุกคนจึงเริ่มได้
 

@@ -45,12 +45,12 @@ Tab เลือกปุ่ม, Enter กด/ส่งแชต, `?` วิธ�
 
 ดูขั้นตอนสร้างบริการ ตั้งค่า URL และตรวจรับที่ **[DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
-- `netlify.toml`: `npm run build` → `dist` ตั้ง `PUBLIC_GAME_SERVER_URL` ให้เป็น Render HTTPS origin
+- `netlify.toml`: `npm run build` → `dist` กำหนด `PUBLIC_GAME_SERVER_URL` เป็น `https://moonfall-realtime.onrender.com` ใน build config แล้ว เปลี่ยนผ่าน Netlify environment settings ได้
 - `render.yaml`: Node Web Service หนึ่ง instance, health `/health`, ตั้ง `ALLOWED_ORIGINS` เป็น Netlify origin
-- ไม่ใส่ backend URL ตายตัวใน source, ไม่ใช้ Netlify Functions ถือห้องหรือ WebSocket, ไม่ส่ง credentials ลง frontend
+- กำหนด backend URL ผ่าน build configuration และเปลี่ยนได้ด้วย Environment variables; ไม่ใช้ Netlify Functions ถือห้องหรือ WebSocket และไม่ส่ง credentials ลง frontend
 - ลิงก์เชิญเป็น URL Netlify พร้อม `?room=รหัส` แชร์ให้เพื่อนได้เมื่อ deploy และตั้งค่าสองบริการสำเร็จ
 
-**ยังไม่มีลิงก์ deploy สาธารณะจากงานนี้** ต้องเชื่อม GitHub และสร้างบริการในบัญชี Netlify/Render ของผู้ใช้ก่อน ขั้นตอน local build ไม่ได้เผยแพร่เว็บ
+ผู้ใช้สร้าง Netlify ที่ `https://effulgent-alfajores-8367b8.netlify.app` และ Render ที่ `https://moonfall-realtime.onrender.com` แล้ว Backend ตอบ health และอนุญาต Netlify origin นี้ การใช้งานหน้าเว็บยังขึ้นกับ production deploy ล่าสุดสำเร็จ ขั้นตอน local build ไม่ได้ยืนยันสถานะ deploy จริง
 
 ## ตรวจสอบ
 

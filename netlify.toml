@@ -4,6 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "24"
+  PUBLIC_GAME_SERVER_URL = "https://moonfall-realtime.onrender.com"
 
 [[headers]]
   for = "/*"
