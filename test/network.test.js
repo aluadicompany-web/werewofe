@@ -52,3 +52,14 @@ test('AFK and disconnected players do not stop phase deadlines or automatic next
  for(const s of sockets.slice(3))s.disconnect();await until(()=>sockets[0].state.round===2,6000);assert.equal(sockets[0].state.phase,'night');assert.ok(sockets[0].state.players.every(p=>p.alive));assert.equal(sockets[0].state.players.filter(p=>!p.connected).length,3);
  }finally{for(const s of sockets)s.disconnect();child.kill();}
 });
+test('a newcomer can recover a lobby after all previous players disconnect', {timeout:10000},async()=>{
+ const {child,ready}=serverAt(3106);const sockets=[];
+ try{
+  await ready;const connect=async()=>{const s=io('http://127.0.0.1:3106',{forceNew:true,reconnection:false});sockets.push(s);await new Promise(r=>s.once('connect',r));s.on('state',v=>s.state=v);return s;};
+  const owner=await connect();const entry=await emit(owner,'enter',{create:true,name:'old owner'});owner.disconnect();await delay(100);
+  const guest=await connect();assert.equal((await emit(guest,'enter',{code:entry.code,name:'new owner'})).ok,true);await until(()=>guest.state?.players.length===2);
+  assert.equal(guest.state.players.find(p=>p.name==='old owner').connected,false);assert.equal(guest.state.host,true);
+  const offline=guest.state.players.find(p=>p.name==='old owner').id;assert.equal((await emit(guest,'remove',{target:offline})).ok,true);
+  assert.equal((await emit(guest,'settings',{timing:'quick'})).ok,true);
+ }finally{for(const s of sockets)s.disconnect();child.kill();}
+});

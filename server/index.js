@@ -64,9 +64,9 @@ io.on('connection', socket => {
         if (!p) throw Error('ที่นั่งเดิมหมดอายุหรือถูกนำออกจากห้อง กรุณาเข้าร่วมใหม่');
         for (const other of io.sockets.sockets.values()) if (other !== socket && other.data.code === code && other.data.playerId === p.id) { other.data.code = null; other.emit('replaced'); other.disconnect(true); }
         p.previousToken = p.authToken; p.previousTokenUntil = Date.now() + 30000; p.authToken = randomUUID(); p.connected = true;
-        if (!r.players.find(p => p.id === r.host)?.connected) r.host = p.id;
       } else { const id = randomUUID(); join(r, name, id); p = r.players.find(p => p.id === id); }
     }
+    if (!r.players.find(player => player.id === r.host)?.connected) r.host = p.id;
     socket.data.code = r.code; socket.data.playerId = p.id; r.touched = Date.now(); publish(r);
     return { token: p.authToken, code: r.code };
   });

@@ -17,3 +17,4 @@
 button:disabled:not(.player){opacity:.75;color:#c0c7ba}.primary:disabled{background:#344035;border-color:#52604b}
 
 .player.my-vote{border-color:var(--green);background:linear-gradient(#314638,#1c3028)}.player .vote-marker{font-size:32px;line-height:1;font-weight:700;color:#e0f1d3;border:2px solid var(--green);background:#203e2d;box-shadow:0 0 18px #89ac9522}.player.my-vote.selected{border-color:var(--gold)}
+#toast{width:max-content;pointer-events:none}@media(max-width:720px){#toast{bottom:calc(80px + env(safe-area-inset-bottom,0px))}}

@@ -37,6 +37,9 @@ async function enter(create) {
 }
 $('entry-form').addEventListener('submit', e => { e.preventDefault(); enter(true); });
 $('join').onclick = () => enter(false);
+$('name').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.isComposing && $('code').value.trim()) { e.preventDefault(); enter(false); }
+});
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); enter(false); } });
 $('help').onclick = () => $('rules').showModal(); $('close-rules').onclick = () => $('rules').close();
 document.addEventListener('keydown', e => { if (e.key === '?' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { e.preventDefault(); if (!$('rules').open) $('rules').showModal(); } });

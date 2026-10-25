@@ -10,7 +10,9 @@
     "check": "node scripts/check.mjs",
     "test:browser": "node e2e/playtest.mjs",
     "build": "node scripts/build.mjs",
-    "test:vote": "node e2e/vote-privacy.mjs"
+    "test:vote": "node e2e/vote-privacy.mjs",
+    "test:lobby": "node e2e/lobby-recovery.mjs",
+    "test:hunter": "node e2e/hunter-flow.mjs"
   },
   "engines": {
     "node": ">=22"
