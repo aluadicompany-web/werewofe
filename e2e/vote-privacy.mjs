@@ -48,12 +48,20 @@ try {
   await pages[2].screenshot({ path: 'test-results/vote-privacy/other-player-desktop.png', fullPage: true });
   await pages[0].setViewportSize({ width: 390, height: 844 }); await pages[0].screenshot({ path: 'test-results/vote-privacy/voter-mobile.png', fullPage: true });
   await expect(pages[0].locator('#phase-title')).toHaveText('โหวตรอบสอง · ผู้ที่คะแนนเสมอ', { timeout: 15000 });
-  for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  for (const p of pages) {
+    await expect(p.locator('.vote-marker')).toHaveCount(0);
+    await expect(p.locator('.runoff-candidate')).toHaveCount(2);
+    await expect(p.locator('.runoff-candidate .runoff-tag')).toHaveCount(2);
+    await expect(p.locator('.runoff-inactive.can-select')).toHaveCount(0);
+    await expect(p.locator('#phase-hint')).toContainText('ผู้เข้ารอบ 2');
+  }
+  await pages[0].screenshot({ path: 'test-results/vote-privacy/runoff-mobile.png', fullPage: true });
   await card(0, 2).tap(); await expect(card(0, 2).locator('.vote-marker')).toBeVisible();
   await expect(pages[0].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true })).toHaveCount(0);
   for (const p of pages.slice(1)) await expect(p.locator('.vote-marker')).toHaveCount(0);
   await expect(pages[0].locator('#phase-title')).toHaveText('คำตัดสินของหมู่บ้าน', { timeout: 15000 });
   for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
+  for (const p of pages) await expect(p.locator('.runoff-candidate')).toHaveCount(0);
   if (errors.length) throw Error(errors.join('\n'));
   console.log('PASS: six browser clients; night ability still requires confirmation; one-click/keyboard/touch votes; no confirmation; private marker; latest rapid click; tally waits for deadline; change target; abstain; reconnect; independent voters; runoff reset; marker removed after voting; desktop/mobile screenshots; no page errors.');
 } finally { await browser?.close(); server.kill(); }

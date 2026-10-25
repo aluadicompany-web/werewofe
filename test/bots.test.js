@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { room, start, advance, configure, view, resetToLobby, act } from '../server/game.js';
-import { fillBots, addBot, clearBots, runBots, gmProjection } from '../server/bots.js';
+import { fillBots, addBot, clearBots, runBots, gmProjection, setGMRole } from '../server/bots.js';
+import { CLASSIC_PRESETS } from '../shared/rules.js';
 import { createGMGate } from '../server/gm-auth.js';
 const setup = (n = 6) => { const r = room('GMTEST', 'GM', 'owner', { isTest: true }); fillBots(r, 'owner', n); r.players[0].ready = true; start(r, 'owner'); advance(r); return r; };
 test('GM key is required, disabled by default, exact, and failures are limited across connections', () => {
@@ -51,4 +52,24 @@ test('random bot matches for every 6–12 preset finish through real resolver an
 test('automatic bot scheduler waits for its turn, then submits before the phase deadline', () => {
   const r = setup(); assert.equal(runBots(r, { now: r.phaseStartedAt }), false); assert.equal(Object.keys(r.actions).length, 0);
   assert.equal(runBots(r, { now: r.deadline - 1 }), true); assert.ok(Object.keys(r.actions).length >= 2); assert.equal(r.phase, 'night');
+});
+
+test('GM may choose any role in the current preset without changing deck counts for every 6–12 size', () => {
+  for (let n = 6; n <= 12; n++) for (const role of Object.keys(CLASSIC_PRESETS[n])) {
+    const r = room('GM', 'Owner', 'owner', { isTest: true }); fillBots(r, 'owner', n);
+    r.players[0].ready = true; setGMRole(r, 'owner', role); assert.equal(r.players[0].ready, false);
+    r.players[0].ready = true; start(r, 'owner'); assert.equal(r.players[0].role, role);
+    const counts = {}; for (const p of r.players) counts[p.role] = (counts[p.role] || 0) + 1;
+    assert.deepEqual(counts, CLASSIC_PRESETS[n]); assert.throws(() => setGMRole(r, 'owner', 'villager'), /ห้องรอ/);
+    resetToLobby(r); assert.equal(gmProjection(r, 'owner').selectedRole, role);
+  }
+});
+test('GM role selection rejects guests, ordinary rooms, invalid roles and incompatible player counts', () => {
+  const normal = room('NORMAL', 'Host', 'owner'); assert.throws(() => setGMRole(normal, 'owner', 'seer'), /เฉพาะ GM/);
+  const r = room('GM', 'Owner', 'owner', { isTest: true }); fillBots(r, 'owner', 6);
+  assert.throws(() => setGMRole(r, 'guest', 'seer'), /เฉพาะ GM/);
+  for (const role of ['hunter', 'elder', 'alpha_wolf', '__proto__', {}, undefined]) assert.throws(() => setGMRole(r, 'owner', role), /ไม่มีในชุด/);
+  fillBots(r, 'owner', 12); setGMRole(r, 'owner', 'elder'); clearBots(r, 'owner'); fillBots(r, 'owner', 6); r.players[0].ready = true;
+  assert.throws(() => start(r, 'owner'), /บทบาท GM/);
+  setGMRole(r, 'owner', 'random'); assert.equal(gmProjection(r, 'owner').selectedRole, null); r.players[0].ready = true; start(r, 'owner');
 });

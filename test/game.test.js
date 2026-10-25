@@ -99,3 +99,13 @@ test('day vote target is private to voter, updates on change/abstain, and resets
  action(r,voter,target);action(r,other,voter);advance(r);assert.equal(r.phase,'runoff');assert.equal(view(r,voter.id).me.action,null);
  action(r,voter,target);assert.equal(view(r,voter.id).me.action,target.seat);assert.equal(view(r,other.id).me.action,null);
 });
+
+test('Seer results are keyed by stable seat, delivered at morning only and absent from other private views', () => {
+  const r = fixed(), seer = role(r, 'seer'), wolf = role(r, 'werewolf'), villager = role(r, 'villager');
+  action(r, seer, villager); assert.equal(view(r, seer.id).me.visions.length, 0); advance(r);
+  assert.deepEqual(view(r, seer.id).me.visions[0], { targetId: villager.seat, name: villager.name, wolf: false, round: 1 });
+  assert.equal(view(r, wolf.id).me.visions.length, 0); assert.ok(view(r, wolf.id).players.every(p => !('visions' in p)));
+  advance(r); advance(r); advance(r); assert.equal(r.phase, 'night');
+  action(r, seer, wolf); assert.equal(view(r, seer.id).me.visions.length, 1); advance(r);
+  assert.equal(view(r, seer.id).me.visions[1].targetId, wolf.seat); assert.equal(view(r, seer.id).me.visions[1].wolf, true);
+});

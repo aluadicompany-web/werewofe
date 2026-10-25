@@ -16,12 +16,18 @@ try {
   if (await gm.evaluate(key => JSON.stringify({ ...sessionStorage, ...localStorage }).includes(key), fixture)) throw Error('GM master key persisted in browser storage');
   await gm.getByRole('button', { name: 'เติมบอทให้ครบ 6 คน', exact: true }).click(); await expect(gm.locator('.player:not(.empty)')).toHaveCount(6);
   await gm.getByRole('button', { name: 'เติมบอทให้ครบ 12 คน', exact: true }).click(); await expect(gm.locator('.player:not(.empty)')).toHaveCount(12); await expect(gm.getByRole('button', { name: '+ บอท 1 ตัว', exact: true })).toBeDisabled();
+  await gm.locator('#gm-role').selectOption('elder'); await expect(gm.locator('#gm-role')).toHaveValue('elder');
   await gm.screenshot({ path: 'test-results/gm-room/lobby-12-desktop.png', fullPage: true });
   await gm.locator('#gm-speed').selectOption('20'); await expect(gm.locator('#gm-speed')).toHaveValue('20'); await gm.locator('#gm-speed').selectOption('1');
   await gm.getByRole('button', { name: 'ลบบอททั้งหมด', exact: true }).click(); await expect(gm.locator('.player:not(.empty)')).toHaveCount(1);
   const guest = await page(); await guest.locator('#name').fill('QA Guest'); await guest.locator('#code').fill(code); await guest.locator('#join').click(); await expect(guest.locator('#game')).toBeVisible(); await expect(guest.locator('#gm-panel')).toBeHidden(); await expect(guest.locator('#round-label')).toContainText('GM TEST');
   await gm.getByRole('button', { name: 'เติมบอทให้ครบ 6 คน', exact: true }).click(); await expect(guest.locator('.player:not(.empty)')).toHaveCount(6);
-  await gm.locator('#timing').selectOption('quick'); await gm.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click(); await guest.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click(); await gm.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true }).click();
+  await gm.locator('#timing').selectOption('quick'); await gm.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click(); await guest.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click();
+  await expect(gm.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true })).toBeDisabled();
+  await gm.locator('#gm-role').selectOption('seer'); await expect(gm.locator('#gm-role')).toHaveValue('seer');
+  await gm.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click(); await guest.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click();
+  await gm.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true }).click(); await gm.locator('#reveal').click(); await expect(gm.locator('#role-content h3')).toContainText('ผู้หยั่งรู้'); await expect(gm.locator('#gm-role')).toHaveCount(0);
+
   const step = async () => { const before = await gm.locator('#game').getAttribute('data-phase-id'); await gm.getByRole('button', { name: 'จบช่วงนี้ →', exact: true }).click(); await expect.poll(() => gm.locator('#game').getAttribute('data-phase-id')).not.toBe(before); };
   await step(); await expect(gm.locator('#game')).toHaveAttribute('data-phase', 'night');
   await gm.locator('#gm-reveal').check(); await expect(gm.locator('#gm-debug tr')).toHaveCount(7); await expect(guest.locator('#gm-debug tr')).toHaveCount(0);
@@ -48,5 +54,5 @@ try {
   await gm.getByRole('button', { name: 'เล่นอีกครั้ง ↻', exact: true }).click(); await guest.locator('#join').click(); await expect(guest.locator('#game')).toBeVisible();
   gm.once('dialog', d => d.accept()); await gm.locator('#leave').click(); await expect(gm.locator('#landing')).toBeVisible(); await expect(guest.locator('#landing')).toBeVisible(); await expect(guest.locator('#toast')).toHaveText('GM ปิดห้องทดสอบแล้ว');
   if (errors.length) throw Error(errors.join('\n'));
-  console.log('PASS: password-gated GM room; 6/12 capacity; bot readiness/actions; private inspector; no stored master key; reconnect; speed control; reset; complete bot match; close/guest notification; desktop/mobile; no page errors');
+  console.log('PASS: password-gated GM room; preset-compatible GM role selection; 6/12 capacity; bot readiness/actions; private inspector; no stored master key; reconnect; speed control; reset; complete bot match; close/guest notification; desktop/mobile; no page errors');
 } finally { await browser?.close(); server.kill(); }

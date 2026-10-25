@@ -19,12 +19,13 @@ test('GM auth, bots, private inspector, stale commands, reconnect, reset and clo
     assert.equal(gm.state.testRoom, true); assert.equal(gm.state.players.length, 1); assert.ok(!JSON.stringify(gm.state).includes(fixture));
     const guest = await connect(); await emit(guest, 'enter', { code: entry.code, name: 'Guest', gm: true }); await until(() => guest.state?.players.length === 2);
     assert.equal(guest.state.gm, false); assert.equal(guest.state.gmState, null);
-    for (const [event, data] of [['gm_bots', { operation: 'fill', total: 12 }], ['gm_speed', { speed: 20 }], ['gm_reset', {}], ['gm_step', {}], ['gm_bots_now', {}]]) assert.equal((await emit(guest, event, data)).ok, false);
+    for (const [event, data] of [['gm_bots', { operation: 'fill', total: 12 }], ['gm_speed', { speed: 20 }], ['gm_role', { role: 'seer' }], ['gm_reset', {}], ['gm_step', {}], ['gm_bots_now', {}]]) assert.equal((await emit(guest, event, data)).ok, false);
     assert.equal((await emit(gm, 'gm_bots', { operation: 'fill', total: 6 })).ok, true); await until(() => guest.state.players.length === 6); assert.equal(gm.state.players.filter(p => p.bot).length, 4);
+    assert.equal((await emit(gm, 'gm_role', { role: 'seer' })).ok, true); assert.equal(gm.state.gmState.selectedRole, 'seer'); assert.equal(guest.state.gmState, null);
     await emit(gm, 'settings', { timing: 'quick' }); assert.ok(gm.state.players.filter(p => p.bot).every(p => p.ready)); await emit(gm, 'ready'); await emit(guest, 'ready'); await emit(gm, 'start'); await until(() => gm.state.phase === 'role_reveal');
-    await until(() => guest.state.phase === 'role_reveal'); assert.equal(gm.state.gmState.players.filter(p => p.role).length, 6); assert.equal(guest.state.players.filter(p => p.role).length, 1); assert.equal(guest.state.gmState, null);
+    await until(() => guest.state.phase === 'role_reveal'); assert.equal(gm.state.me.role, 'seer'); assert.equal(gm.state.gmState.players.filter(p => p.role).length, 6); assert.equal(guest.state.players.filter(p => p.role).length, 1); assert.equal(guest.state.gmState, null);
     const stale = { gameId: gm.state.gameId, phaseId: gm.state.phaseId }; await emit(gm, 'gm_step', stale); await until(() => gm.state.phase === 'night');
-    assert.equal((await emit(gm, 'gm_step', stale)).ok, false); assert.equal((await emit(gm, 'gm_bots', { operation: 'clear' })).ok, false);
+    assert.equal((await emit(gm, 'gm_step', stale)).ok, false); assert.equal((await emit(gm, 'gm_role', { role: 'doctor' })).ok, false); assert.equal((await emit(gm, 'gm_bots', { operation: 'clear' })).ok, false);
     assert.equal((await emit(gm, 'gm_bots_now', { gameId: gm.state.gameId, phaseId: gm.state.phaseId })).ok, true);
     assert.ok(gm.state.gmState.players.filter(p => gm.state.players.find(q => q.id === p.id)?.bot).some(p => p.action)); assert.equal(gm.state.phase, 'night');
     const actions = gm.state.gmState.players.map(p => p.action); await emit(gm, 'gm_bots_now', { gameId: gm.state.gameId, phaseId: gm.state.phaseId }); assert.deepEqual(gm.state.gmState.players.map(p => p.action), actions);
@@ -33,7 +34,7 @@ test('GM auth, bots, private inspector, stale commands, reconnect, reset and clo
     await emit(restored, 'gm_reset'); await until(() => guest.state.phase === 'lobby'); assert.ok(restored.state.players.filter(p => p.bot).every(p => p.ready));
     await emit(restored, 'gm_speed', { speed: 20 }); assert.equal(restored.state.gmState.speed, 20); assert.equal(guest.state.gmState, null);
     let closed = false; guest.on('room_closed', () => closed = true); await emit(restored, 'leave'); await until(() => closed);
-    assert.equal((await emit(guest, 'gm_reset')).ok, false); const normal = await emit(guest, 'enter', { create: true, name: 'Normal' }); assert.equal(normal.ok, true); assert.equal(guest.state.gm, false); assert.equal(guest.state.testRoom, false);
+    assert.equal((await emit(guest, 'gm_reset')).ok, false); const normal = await emit(guest, 'enter', { create: true, name: 'Normal' }); assert.equal(normal.ok, true); assert.equal(guest.state.gm, false); assert.equal(guest.state.testRoom, false); assert.equal((await emit(guest, 'gm_role', { role: 'seer' })).ok, false);
     assert.equal((await emit(guest, 'gm_bots', { operation: 'fill', total: 6, gmKey: fixture })).ok, false);
   } finally { for (const client of clients) client.disconnect(); server.kill(); }
 });

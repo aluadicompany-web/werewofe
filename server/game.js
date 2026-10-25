@@ -6,7 +6,7 @@ const alive = r => r.players.filter(p => p.alive);
 const wolves = p => ROLES[p.role]?.team === 'wolf';
 export function room(code, name, token, options = {}) {
   const r = { code, host: token, phase: 'lobby', phaseId: randomUUID(), gameId: null, round: 0,
-    isTest: Boolean(options.isTest), gmId: options.isTest ? token : null, testSpeed: 1, baseTimerScale: options.timerScale || 1,
+    isTest: Boolean(options.isTest), gmId: options.isTest ? token : null, testSpeed: 1, gmRole: null, baseTimerScale: options.timerScale || 1,
     mode: 'classic', timing: 'standard', timerScale: options.timerScale || 1, players: [], actions: {}, votes: {},
     messages: [], log: [], events: [], receipts: {}, deadline: null, winner: null, runoff: [], pending: null, reaction: null };
   join(r, name, token); return r;
@@ -34,9 +34,18 @@ export function start(r, actor) {
   const preset = CLASSIC_PRESETS[r.players.length]; if (!preset) fail('ต้องมีผู้เล่น 6–12 คน');
   if (r.mode !== 'classic') fail('เปิดให้เล่นเฉพาะ Classic');
   if (!r.players.every(p => p.ready && p.connected)) fail('ทุกคนต้องเชื่อมต่อและกดพร้อมก่อน');
+  const forcedRole = r.isTest ? r.gmRole : null;
+  if (forcedRole && (typeof forcedRole !== 'string' || !Object.hasOwn(preset, forcedRole))) fail('บทบาท GM ที่เลือกไม่มีในชุด Classic สำหรับจำนวนคนนี้ กรุณาเลือกใหม่หรือเพิ่มผู้เล่น');
   const deck = Object.entries(preset).flatMap(([role, count]) => Array(count).fill(role));
   if (deck.length !== r.players.length || deck.some(role => !ROLES[role])) fail('ชุดบทบาทไม่ถูกต้อง');
   for (let i = deck.length - 1; i > 0; i--) { const j = randomInt(i + 1); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+  if (forcedRole) {
+    const ownerIndex = r.players.findIndex(p => p.id === r.gmId);
+    const matches = deck.map((role, index) => role === forcedRole ? index : -1).filter(index => index >= 0);
+    if (ownerIndex < 0 || !matches.length) fail('ไม่พบที่นั่ง GM หรือบทบาทที่เลือก');
+    const roleIndex = matches[randomInt(matches.length)];
+    [deck[ownerIndex], deck[roleIndex]] = [deck[roleIndex], deck[ownerIndex]];
+  }
   r.players.forEach((p, i) => { p.role = deck[i]; p.alive = true; p.visions = []; p.lastDoctor = null; p.armor = 1; p.hunterUsed = false; p.revealed = false; });
   r.gameId = randomUUID(); r.round = 1; r.winner = null; r.events = []; r.receipts = {}; r.pending = null; r.reaction = null;
   r.log = ['แจกบทบาทแล้ว เปิดดูเป็นความลับก่อนเริ่มคืนแรก']; r.messages = [];
@@ -80,7 +89,7 @@ function resolveNight(r) {
   if (doctor) doctor.lastDoctor = protection && protection !== 'skip' ? protection : null;
   const seer = live.find(p => p.role === 'seer');
   const inspected = seer && live.find(p => p.seat === r.actions[seer.id]);
-  if (inspected) r.pending.visions.push({ actor: seer.id, name: inspected.name, wolf: inspected.role === 'werewolf', round: r.round });
+  if (inspected) r.pending.visions.push({ actor: seer.id, targetId: inspected.seat, name: inspected.name, wolf: inspected.role === 'werewolf', round: r.round });
   if (target) {
     if (target.seat === protection) audit(r, 'doctor_saved', { seat: target.seat });
     else if (target.role === 'elder' && target.armor > 0) { target.armor--; audit(r, 'elder_armor_used', { seat: target.seat }); }

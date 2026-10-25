@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { ROLES, CLASSIC_PRESETS } from '../shared/rules.js';
 import { act, join, view } from './game.js';
 export function requireGM(r, actor) {
   if (!r.isTest || r.gmId !== actor) throw Error('คำสั่งนี้ใช้ได้เฉพาะ GM เจ้าของห้องทดสอบ');
@@ -18,6 +19,13 @@ export function fillBots(r, actor, total) {
   while (r.players.length < total) addBot(r, actor);
 }
 export function clearBots(r, actor) { lobbyGM(r, actor); r.players = r.players.filter(p => !p.isBot); }
+export function setGMRole(r, actor, role) {
+  lobbyGM(r, actor);
+  const selected = role === 'random' ? null : role;
+  const preset = CLASSIC_PRESETS[r.players.length] || CLASSIC_PRESETS[6];
+  if (selected !== null && (typeof selected !== 'string' || !Object.hasOwn(ROLES, selected) || !Object.hasOwn(preset, selected))) throw Error('บทบาทนี้ไม่มีในชุด Classic สำหรับจำนวนคนนี้');
+  if (r.gmRole !== selected) { r.gmRole = selected; r.players.forEach(p => p.ready = Boolean(p.isBot)); }
+}
 function choices(r, bot) {
   const live = r.players.filter(p => p.alive);
   if (r.phase === 'night') {
@@ -51,6 +59,6 @@ export function runBots(r, { now = Date.now(), force = false } = {}) {
 }
 export function gmProjection(r, actor) {
   if (!r.isTest || r.gmId !== actor) return null;
-  return { speed: r.testSpeed || 1, players: r.players.map(p => ({ id: p.seat, role: p.role,
+  return { speed: r.testSpeed || 1, selectedRole: r.gmRole || null, players: r.players.map(p => ({ id: p.seat, role: p.role,
     action: r.actions[p.id] || r.votes[p.id] || null, visions: view(r, p.id).me?.visions || [], armor: p.role === 'elder' ? p.armor : null })) };
 }

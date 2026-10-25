@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { room, join, configure, start, act, advance, view, resetToLobby } from './game.js';
-import { requireGM, addBot, fillBots, clearBots, runBots, gmProjection } from './bots.js';
+import { requireGM, addBot, fillBots, clearBots, runBots, gmProjection, setGMRole } from './bots.js';
 import { createGMGate } from './gm-auth.js';
 const authorizeGM = createGMGate(process.env.GM_ADMIN_KEY);
 const production = process.env.NODE_ENV === 'production';
@@ -104,6 +104,7 @@ io.on('connection', socket => {
     else throw Error('คำสั่งบอทไม่ถูกต้อง');
     publish(r);
   });
+  handle('gm_role', d => { const r = current(); setGMRole(r, socket.data.playerId, d.role); publish(r); });
   handle('gm_speed', d => {
     const r = current(); requireGM(r, socket.data.playerId);
     if (r.phase !== 'lobby' || ![1, 5, 20].includes(d.speed)) throw Error('เลือกความเร็ว 1, 5 หรือ 20 เท่าในห้องรอ');

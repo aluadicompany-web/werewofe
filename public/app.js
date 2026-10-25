@@ -1,4 +1,4 @@
-import { ROLES as roles, TIMINGS } from '/shared/rules.js';
+import { ROLES as roles, CLASSIC_PRESETS } from '/shared/rules.js';
 const $ = id => document.getElementById(id);
 const serverUrl = window.MOONFALL_CONFIG?.serverUrl || window.location.origin;
 const socket = io(serverUrl);
@@ -107,7 +107,7 @@ function render() {
     announcement: 'เปิดเผยผู้เสียชีวิตและบทบาท กำลังเข้าสู่การสนทนา',
     discussion: 'แลกเปลี่ยนเบาะแสในแชต ใครพูดจริง ใครกำลังโกหก?',
     voting: 'คลิกผู้เล่นเพื่อโหวตทันที เปลี่ยนได้ก่อนหมดเวลา ระบบจะนับผลเมื่อหมดเวลา',
-    runoff: 'คลิกผู้ที่คะแนนเสมอเพื่อโหวตทันที นับผลเมื่อหมดเวลา ถ้ายังเสมอจะไม่มีการประหาร',
+    runoff: 'ผู้เข้ารอบ 2: ' + state.players.filter(p => state.runoff.includes(p.id)).map(p => p.name).join(', ') + ' · คลิกการ์ดที่ไฮไลท์เพื่อโหวต นับผลเมื่อหมดเวลา',
     execution: 'รอผลการประหารและปฏิกิริยาของนายพราน ก่อนตรวจเงื่อนไขชนะ',
     hunter_reaction: state.me.canReact ? 'คุณมีโอกาสยิงครั้งสุดท้าย เลือกผู้มีชีวิตหนึ่งคน หรือข้ามภายในเวลา' : 'รอนายพรานตัดสินใจครั้งสุดท้าย เงื่อนไขชนะยังไม่ถูกตรวจระหว่างนี้',
     result: 'เปิดเผยทุกบทบาท รอสรุปผลก่อนเริ่มเกมถัดไป', ended: 'ความลับทั้งหมดถูกเปิดเผยแล้ว พร้อมกลับมาลองอีกครั้งไหม?'
@@ -119,14 +119,22 @@ function render() {
   $('preset-info').textContent = preset ? Object.entries(preset).map(([role,count]) => `${roles[role].name} ${count}`).join(' · ') + (state.players.length < 8 ? ' · Quick/Casual ไม่มีจัดอันดับ' : ' · Casual ไม่มีจัดอันดับ') : 'เมื่อครบ 6–12 คน จะแสดงชุดบทบาท Classic ตามจำนวนผู้เล่น';
   const board = $('players'); board.replaceChildren();
   state.players.forEach(p => {
+    const runoffCandidate = state.phase === 'runoff' && p.alive && state.runoff.includes(p.id);
+    const vision = state.me.role === 'seer' ? [...state.me.visions].reverse().find(v => v.targetId === p.id || (!v.targetId && v.name === p.name)) : null;
     const myVote = ['voting','runoff'].includes(state.phase) && state.me.action === p.id;
     const gmPlayer = state.gm && $('gm-reveal').checked ? state.gmState?.players.find(x => x.id === p.id) : null;
     const shownRole = gmPlayer?.role || p.role;
     const can = eligible(p), roleVisible = Boolean(gmPlayer?.role) || p.role && (!p.me || reveal || finished() || !p.alive);
-    const b = button('', () => { if (isVoting()) { submitVote(p.id); } else { selected = p.id; render(); } }, `player ${myVote ? 'my-vote' : ''} ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
-    b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}${myVote ? ' คุณโหวตให้ผู้เล่นนี้แล้ว' : ''}`); b.setAttribute('aria-pressed', selected === p.id || myVote ? 'true' : 'false');
+    const b = button('', () => { if (isVoting()) { submitVote(p.id); } else { selected = p.id; render(); } }, `player ${runoffCandidate ? 'runoff-candidate' : state.phase === 'runoff' ? 'runoff-inactive' : ''} ${myVote ? 'my-vote' : ''} ${!p.alive ? 'dead' : ''} ${can ? 'can-select' : ''} ${selected === p.id ? 'selected' : ''}`, !can);
+    b.dataset.seat = p.id; b.setAttribute('aria-label', `${p.name}${p.me ? ' คุณ' : ''}${p.alive ? '' : ' ถูกกำจัด'}${runoffCandidate ? ' ผู้เข้ารอบโหวตครั้งที่สอง' : ''}${myVote ? ' คุณโหวตให้ผู้เล่นนี้แล้ว' : ''}`); b.setAttribute('aria-pressed', selected === p.id || myVote ? 'true' : 'false');
     b.append(text('span', String(p.seatIndex).padStart(2,'0'), 'seat'), text('span', myVote ? '✓' : roleVisible && state.phase !== 'lobby' ? roles[shownRole].icon : !p.alive ? '✝' : ['☾','✧','♜','❖'][p.seatIndex % 4], myVote ? 'avatar vote-marker' : 'avatar'), text('b', `${p.bot ? '🤖 ' : ''}${p.name}${p.me ? ' (คุณ)' : ''}`));
+    if (vision) {
+      const mark = text('span', vision.wolf ? '👎' : '👍', 'seer-mark');
+      const label = `ผลตรวจคืน ${vision.round}: ${vision.wolf ? 'เป็นหมาป่า' : 'ไม่ใช่หมาป่า'} · เห็นเฉพาะคุณ`;
+      mark.title = label; mark.setAttribute('aria-label', label); b.querySelector('.seat').append(mark);
+    }
     b.append(text('small', state.phase === 'lobby' ? !p.connected ? 'หลุดการเชื่อมต่อ' : p.ready ? 'พร้อมแล้ว' : 'กำลังเตรียมตัว' : roleVisible ? `${roles[shownRole].name}${p.alive ? '' : ' · เสียชีวิต'}` : !p.alive ? 'ถูกกำจัด' : !p.connected ? 'หลุดการเชื่อมต่อ' : 'ยังมีชีวิต'));
+    if (runoffCandidate) b.append(text('span', 'ผู้เข้ารอบ 2', 'runoff-tag'));
     if (myVote) b.querySelector('.vote-marker').setAttribute('aria-label', 'คุณโหวตให้ผู้เล่นนี้แล้ว · เห็นเฉพาะคุณ');
     if (p.host || p.ready && state.phase === 'lobby') b.append(text('span', p.host ? '♔' : '✓', 'check'));
     board.append(b);
@@ -136,7 +144,7 @@ function render() {
   if (state.phase === 'lobby') {
     actions.append(button(state.me.ready ? '✓ พร้อมแล้ว · ยกเลิก' : 'ฉันพร้อมแล้ว', () => send('ready'), state.me.ready ? 'secondary' : 'primary'));
     if (state.host) for (const p of state.players.filter(p => !p.connected)) actions.append(button(`นำ ${p.name} ออกจากห้อง`, () => send('remove', { target: p.id }), 'quiet danger'));
-    if (state.host) actions.append(button('เริ่มคืนแรก →', () => send('start'), 'primary', state.players.length < 6 || state.players.length > 12 || !state.players.every(p => p.ready && p.connected)));
+    if (state.host) actions.append(button('เริ่มคืนแรก →', () => send('start'), 'primary', state.players.length < 6 || state.players.length > 12 || !state.players.every(p => p.ready && p.connected) || Boolean(state.gm && state.gmState?.selectedRole && !Object.hasOwn(state.preset || {}, state.gmState.selectedRole))));
   } else if (state.phase === 'discussion' && state.host) actions.append(button('เปิดการลงคะแนน →', () => send('next', { gameId: state.gameId, phaseId: state.phaseId }), 'primary'));
   else if (state.phase === 'ended' && state.host) actions.append(button('เล่นอีกครั้ง ↻', () => send('rematch'), 'primary'));
   else if (canAct() && isVoting()) {
@@ -163,6 +171,14 @@ function renderGM() {
     controls.append(button('+ บอท 1 ตัว', () => command('gm_bots', { operation: 'add' }), 'secondary', state.players.length >= 12));
     for (const total of [6, 12]) controls.append(button(`เติมบอทให้ครบ ${total} คน`, () => command('gm_bots', { operation: 'fill', total }), 'secondary', state.players.length >= total));
     controls.append(button('ลบบอททั้งหมด', () => command('gm_bots', { operation: 'clear' }), 'quiet', !state.players.some(p => p.bot)));
+    const roleLabel = text('label', 'บทบาทของ GM '), roleSelect = document.createElement('select'); roleSelect.id = 'gm-role'; roleSelect.setAttribute('aria-label', 'บทบาทของ GM ก่อนเริ่มเกม');
+    const available = state.preset || CLASSIC_PRESETS[6];
+    const randomOption = text('option', 'สุ่มตามปกติ'); randomOption.value = 'random'; roleSelect.append(randomOption);
+    for (const id of Object.keys(available)) { const option = text('option', `${roles[id].icon} ${roles[id].name}`); option.value = id; roleSelect.append(option); }
+    const chosen = state.gmState.selectedRole;
+    if (chosen && !Object.hasOwn(available, chosen)) { const option = text('option', `${roles[chosen].name} · ไม่มีในชุดนี้`); option.value = chosen; option.disabled = true; roleSelect.append(option); }
+    roleSelect.value = chosen || 'random'; roleSelect.onchange = () => command('gm_role', { role: roleSelect.value }); roleLabel.append(roleSelect); controls.append(roleLabel);
+    if (chosen && !Object.hasOwn(available, chosen)) controls.append(text('small', 'เพิ่มจำนวนผู้เล่นหรือเลือกบทบาทใหม่ก่อนเริ่มเกม', 'danger'));
     const label = text('label', 'ความเร็วทดสอบ '), speed = document.createElement('select'); speed.id = 'gm-speed'; speed.setAttribute('aria-label', 'ความเร็วห้องทดสอบ');
     for (const n of [1, 5, 20]) { const option = text('option', `${n} เท่า`); option.value = n; speed.append(option); }
     speed.value = state.gmState.speed; speed.onchange = () => command('gm_speed', { speed: Number(speed.value) }); label.append(speed); controls.append(label);
