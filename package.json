@@ -1,0 +1,27 @@
+{
+  "name": "moonfall-werewolf",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "check": "node scripts/check.mjs",
+    "test:browser": "node e2e/playtest.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans-thai": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "socket.io-client": "^4.8.1"
+  }
+}

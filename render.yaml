@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: moonfall-realtime
+    runtime: node
+    plan: free
+    numInstances: 1
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        sync: false
