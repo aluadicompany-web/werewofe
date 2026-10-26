@@ -10,7 +10,7 @@ const authorizeGM = createGMGate(process.env.GM_ADMIN_KEY);
 const production = process.env.NODE_ENV === 'production';
 const origins = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 for (const origin of origins) { const u = new URL(origin); if (u.origin !== origin || !['http:', 'https:'].includes(u.protocol)) throw Error('ALLOWED_ORIGINS must contain exact origins without trailing slashes'); }
-if (production && !origins.length) throw Error('Set ALLOWED_ORIGINS to the exact Netlify site origin');
+if (production && !origins.length) throw Error('Set ALLOWED_ORIGINS to the exact frontend site origin');
 function originAllowed(origin) {
   if (!origin) return true; if (origins.includes(origin)) return true;
   try { return !production && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname); } catch { return false; }

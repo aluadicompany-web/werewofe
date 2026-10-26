@@ -1,11 +1,12 @@
 import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
+const hosted = process.env.NETLIFY === 'true' || process.env.CF_PAGES === '1';
 const raw = process.env.PUBLIC_GAME_SERVER_URL || '';
-if (process.env.NETLIFY === 'true' && !raw) throw Error('Set PUBLIC_GAME_SERVER_URL to the HTTPS Render service origin in Netlify environment settings, then redeploy.');
+if (hosted && !raw) throw Error('Set PUBLIC_GAME_SERVER_URL to the HTTPS Render service origin in your hosting environment settings, then redeploy.');
 let serverUrl = raw;
 if (raw) {
   const u = new URL(raw);
   if (u.username || u.password || u.pathname !== '/' || u.search || u.hash || !['http:', 'https:'].includes(u.protocol)) throw Error('PUBLIC_GAME_SERVER_URL must be an origin without a path or credentials');
-  if (process.env.NETLIFY === 'true' && u.protocol !== 'https:') throw Error('Netlify requires an HTTPS game server');
+  if (hosted && u.protocol !== 'https:') throw Error('Hosted frontend requires an HTTPS game server');
   serverUrl = u.origin;
 }
 await rm('dist', { recursive: true, force: true }); await mkdir('dist', { recursive: true });
