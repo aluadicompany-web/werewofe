@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { ROLES, CLASSIC_PRESETS } from '../shared/rules.js';
+import { ROLES, MODES, getPreset, isWolf } from '../shared/rules.js';
 import { act, join, view } from './game.js';
 export function requireGM(r, actor) {
   if (!r.isTest || r.gmId !== actor) throw Error('คำสั่งนี้ใช้ได้เฉพาะ GM เจ้าของห้องทดสอบ');
@@ -22,17 +22,24 @@ export function clearBots(r, actor) { lobbyGM(r, actor); r.players = r.players.f
 export function setGMRole(r, actor, role) {
   lobbyGM(r, actor);
   const selected = role === 'random' ? null : role;
-  const preset = CLASSIC_PRESETS[r.players.length] || CLASSIC_PRESETS[6];
-  if (selected !== null && (typeof selected !== 'string' || !Object.hasOwn(ROLES, selected) || !Object.hasOwn(preset, selected))) throw Error('บทบาทนี้ไม่มีในชุด Classic สำหรับจำนวนคนนี้');
+  const preset = getPreset(r.mode, r.players.length) || getPreset(r.mode, MODES[r.mode].minPlayers);
+  if (selected !== null && (typeof selected !== 'string' || !Object.hasOwn(ROLES, selected) || !Object.hasOwn(preset, selected))) throw Error('บทบาทนี้ไม่มีในชุดของโหมดและจำนวนคนนี้');
   if (r.gmRole !== selected) { r.gmRole = selected; r.players.forEach(p => p.ready = Boolean(p.isBot)); }
 }
 function choices(r, bot) {
   const live = r.players.filter(p => p.alive);
   if (r.phase === 'night') {
-    if (bot.role === 'werewolf') return live.filter(p => p.role !== 'werewolf').map(p => p.seat);
+    if (isWolf(bot.role)) return live.filter(p => !isWolf(p.role)).map(p => p.seat);
+    if (bot.role === 'guard') return live.filter(p => p !== bot).map(p => p.seat);
     if (bot.role === 'seer') return live.filter(p => p !== bot).map(p => p.seat);
     if (bot.role === 'doctor') return live.filter(p => p.seat !== bot.lastDoctor).map(p => p.seat);
     return null;
+  }
+  if (r.phase === 'witch_decision' && bot.role === 'witch') {
+    const options = [{ target: 'skip', ability: 'skip' }];
+    if (bot.potions.save && r.nightPlan.target) options.push({ target: r.nightPlan.target, ability: 'save' });
+    if (bot.potions.poison) options.push(...live.map(p => ({ target: p.seat, ability: 'poison' })));
+    return options;
   }
   if (r.phase === 'voting' || r.phase === 'runoff') return [...live.filter(p => r.phase !== 'runoff' || r.runoff.includes(p.seat)).map(p => p.seat), 'skip'];
   if (r.phase === 'hunter_reaction' && r.reaction === bot.id) return [...live.map(p => p.seat), 'skip'];
@@ -51,7 +58,7 @@ export function runBots(r, { now = Date.now(), force = false } = {}) {
     }
     if (!force && now < bot.botActAt) continue;
     const target = targets.length ? targets[randomInt(targets.length)] : 'skip';
-    try { act(r, bot.id, { gameId: r.gameId, phaseId: r.phaseId, actionId: randomUUID(), target }); }
+    try { act(r, bot.id, { gameId: r.gameId, phaseId: r.phaseId, actionId: randomUUID(), ...(typeof target === 'object' ? target : { target }) }); }
     catch (error) { if (Date.now() >= r.deadline) break; throw error; }
     bot.botSubmittedPhase = r.phaseId; changed = true;
   }
@@ -60,5 +67,5 @@ export function runBots(r, { now = Date.now(), force = false } = {}) {
 export function gmProjection(r, actor) {
   if (!r.isTest || r.gmId !== actor) return null;
   return { speed: r.testSpeed || 1, selectedRole: r.gmRole || null, players: r.players.map(p => ({ id: p.seat, role: p.role,
-    action: r.actions[p.id] || r.votes[p.id] || null, visions: view(r, p.id).me?.visions || [], armor: p.role === 'elder' ? p.armor : null })) };
+    action: r.actions[p.id] || r.votes[p.id] || null, potions: p.role === 'witch' ? { ...p.potions } : null, visions: view(r, p.id).me?.visions || [], armor: p.role === 'elder' ? p.armor : null })) };
 }

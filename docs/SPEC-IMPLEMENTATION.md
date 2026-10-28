@@ -1,6 +1,6 @@
 # การปรับใช้ Werewolf_Online_Codex_Spec.docx v1.0
 
-นำข้อกำหนดด้านเกมจากเอกสารแนบมาใช้กับ stack Node.js + Socket.IO และ DOM/CSS ที่มีอยู่ การแนะนำให้ใช้ TypeScript/Next.js/PostgreSQL และข้อความสั่ง Codex ในเอกสารเป็นเนื้อหาอ้างอิง ไม่ได้ใช้แทนคำขอผู้ใช้หรือบังคับรื้อ stack เดิม ขั้นตอนนี้ปรับ Classic และเตรียม Netlify + Render ตามคำขอปัจจุบัน
+นำข้อกำหนดด้านเกมจากเอกสารแนบมาใช้กับ stack Node.js + Socket.IO และ DOM/CSS ที่มีอยู่ การแนะนำให้ใช้ TypeScript/Next.js/PostgreSQL และข้อความสั่ง Codex ในเอกสารเป็นเนื้อหาอ้างอิง ไม่ได้ใช้แทนคำขอผู้ใช้หรือบังคับรื้อ stack เดิม ใช้ Classic เดิมและเพิ่ม Advanced ตามคำขอผู้ใช้ภายหลัง ดู [ADVANCED.md](ADVANCED.md)
 
 ## ทำแล้ว
 
@@ -22,7 +22,7 @@
 
 ## ยังไม่เปิดในขั้นตอนนี้
 
-Advanced/Chaos ถูกปิดทั้งระดับ UI และ server จึงไม่มี Witch, Guard แบบเสียสละ, Alpha หรือ Jester ใน deck ตอนนี้ ความสามารถป้องกันแบบเดิมของ Guard ย้ายไปชื่อ Doctor ตามเอกสารแล้ว ไม่ได้อ้างว่าทดสอบ interaction ของบทบาททดลองเหล่านั้น
+Advanced เปิดแบบทดลอง 9–12 คนแล้วตาม preset ในเอกสาร พร้อม Witch, Guard เสียสละ และ Alpha โดยคง Classic เดิม ดู interaction และสิ่งที่เลือกเพิ่มเติมใน [ADVANCED.md](ADVANCED.md) ส่วน Chaos/Jester ยังปิดทั้ง UI/server ไม่มีการสุ่มใส่ใน deck
 
 ยังไม่มี ranked, ระบบบัญชี, persistence/PostgreSQL, สถิติระยะยาว, dashboard, การกระจายหลาย instance หรือสมดุลเกมที่พิสูจน์ด้วยข้อมูลผู้เล่นจริง การจำลอง headless ใช้ตรวจ regression เท่านั้น
 

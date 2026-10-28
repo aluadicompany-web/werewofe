@@ -5,6 +5,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { room, join, configure, start, act, advance, view, resetToLobby } from './game.js';
 import { requireGM, addBot, fillBots, clearBots, runBots, gmProjection, setGMRole } from './bots.js';
+import { isWolf } from '../shared/rules.js';
 import { createGMGate } from './gm-auth.js';
 const authorizeGM = createGMGate(process.env.GM_ADMIN_KEY);
 const production = process.env.NODE_ENV === 'production';
@@ -31,7 +32,7 @@ app.use('/fonts/latin', express.static(local('../node_modules/@fontsource/space-
 app.use('/vendor', express.static(local('../node_modules/socket.io/client-dist')));
 app.use('/shared', express.static(local('../shared')));
 app.use(express.static(local('../public')));
-app.get('/health', (_, res) => res.json({ ok: true, mode: 'classic', minPlayers: 6, maxPlayers: 12 }));
+app.get('/health', (_, res) => res.json({ ok: true, mode: 'classic', modes: ['classic', 'advanced'], minPlayers: 6, maxPlayers: 12 }));
 const publish = r => { for (const s of io.sockets.sockets.values()) if (s.data.code === r.code) s.emit('state', { ...view(r, s.data.playerId), gmState: gmProjection(r, s.data.playerId) }); };
 const nameOf = value => { if (typeof value !== 'string' || !value.trim() || value.trim().length > 20) throw Error('กรอกชื่อ 1–20 ตัวอักษร'); return value.trim(); };
 function closeRoom(r) {
@@ -87,7 +88,7 @@ io.on('connection', socket => {
     const target = r.players.find(p => p.seat === d.target); if (!target || target.connected) throw Error('นำออกได้เฉพาะผู้เล่นที่หลุดการเชื่อมต่อ');
     r.players = r.players.filter(p => p !== target); publish(r);
   });
-  handle('settings', d => { const r = current(); configure(r, socket.data.playerId, d.timing); publish(r); });
+  handle('settings', d => { const r = current(); configure(r, socket.data.playerId, d.timing ?? r.timing, d.mode ?? r.mode); publish(r); });
   handle('ready', () => { const r = current(); if (r.phase !== 'lobby') throw Error('เกมเริ่มแล้ว'); const p = r.players.find(p => p.id === socket.data.playerId); p.ready = !p.ready; publish(r); });
   handle('start', () => { const r = current(); start(r, socket.data.playerId); publish(r); });
   handle('action', d => { const r = current(); act(r, socket.data.playerId, d); publish(r); });
@@ -127,7 +128,7 @@ io.on('connection', socket => {
     const channel = d.channel === 'wolves' ? 'wolves' : 'village';
     if (!['lobby', 'ended', 'result'].includes(r.phase)) {
       if (!p.alive) throw Error('ผู้ถูกกำจัดอ่านแชตได้ แต่ส่งข้อความไม่ได้');
-      const allowed = channel === 'wolves' ? p.role === 'werewolf' && r.phase === 'night' : ['discussion', 'voting', 'runoff'].includes(r.phase);
+      const allowed = channel === 'wolves' ? isWolf(p.role) && r.phase === 'night' : ['discussion', 'voting', 'runoff'].includes(r.phase);
       if (!allowed) throw Error('ช่องสนทนานี้ยังใช้ไม่ได้ในช่วงนี้');
     } else if (channel === 'wolves') throw Error('ช่องหมาป่าใช้ได้ตอนกลางคืนเท่านั้น');
     r.messages.push({ id: randomUUID(), name: p.name, text, channel, at: Date.now() }); r.messages = r.messages.slice(-200); publish(r);

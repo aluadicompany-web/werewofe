@@ -14,7 +14,8 @@
     "test:lobby": "node e2e/lobby-recovery.mjs",
     "test:hunter": "node e2e/hunter-flow.mjs",
     "test:gm": "node e2e/gm-room.mjs",
-    "test:seer": "node e2e/seer-results.mjs"
+    "test:seer": "node e2e/seer-results.mjs",
+    "test:advanced": "node e2e/advanced.mjs"
   },
   "engines": {
     "node": ">=22"

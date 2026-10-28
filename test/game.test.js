@@ -19,9 +19,9 @@ test('start requires 6–12, all ready/connected and host; lobby capacity and un
 test('every exact Classic preset 6–12, secure assignment, and role maxima',()=>{
  for(let n=6;n<=12;n++){const r=setup(n);const counts={};for(const p of r.players)counts[p.role]=(counts[p.role]||0)+1;assert.deepEqual(counts,CLASSIC_PRESETS[n]);assert.equal(r.players.length,n);assert.equal(new Set(r.players.map(p=>p.seat)).size,n);assert.equal(counts.seer,1);assert.equal(counts.doctor,1);assert.ok((counts.hunter||0)<=1);assert.ok((counts.elder||0)<=1);}
 });
-test('only Classic allowed; timing presets configurable by host, readiness resets',()=>{
+test('only enabled modes allowed; timing presets configurable by host, readiness resets',()=>{
  const r=room('T','a','0');r.players[0].ready=true;configure(r,'0','quick');assert.equal(r.timing,'quick');assert.equal(r.players[0].ready,false);assert.throws(()=>configure(r,'other','quick'),/เจ้าของ/);assert.throws(()=>configure(r,'0','chaos'),/ไม่ถูก/);
- const full=setup();full.phase='lobby';full.mode='advanced';assert.throws(()=>start(full,'0'),/Classic/);
+ const full=setup();full.phase='lobby';full.mode='chaos';assert.throws(()=>start(full,'0'),/ยังไม่เปิด/);
  for(const key of Object.keys(TIMINGS)){const s=room('T','a','0');configure(s,'0',key);assert.equal(s.timing,key);}
 });
 test('views hide tokens, roles, night actions, audit and wolf chat from unauthorized players',()=>{
