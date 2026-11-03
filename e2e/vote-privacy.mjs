@@ -24,8 +24,9 @@ try {
   await expect(pages[seer].locator('#phase-title')).toHaveText('ค่ำคืนแห่งความลับ', { timeout: 10000 });
   const nightTarget = seer === 0 ? 1 : 0;
   await pages[seer].locator('.player').nth(nightTarget).click();
-  await expect(pages[seer].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true })).toBeEnabled();
-  await expect(pages[seer].locator('#selection')).toContainText('กดยืนยันเพื่อส่ง');
+  await expect(pages[seer].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true })).toHaveCount(0);
+  await expect(pages[seer].locator('.ability-marker')).toHaveCount(1);
+  await expect(pages[seer].locator('#selection')).toContainText('คำสั่งล่าสุด');
   await expect(pages[0].locator('#phase-title')).toHaveText('รุ่งเช้าแห่งความสงสัย', { timeout: 20000 });
   await pages[0].getByRole('button', { name: 'เปิดการลงคะแนน →', exact: true }).click();
   const seats = await pages[0].locator('.player').evaluateAll(cards => cards.map(c => c.dataset.seat));
@@ -63,5 +64,5 @@ try {
   for (const p of pages) await expect(p.locator('.vote-marker')).toHaveCount(0);
   for (const p of pages) await expect(p.locator('.runoff-candidate')).toHaveCount(0);
   if (errors.length) throw Error(errors.join('\n'));
-  console.log('PASS: six browser clients; night ability still requires confirmation; one-click/keyboard/touch votes; no confirmation; private marker; latest rapid click; tally waits for deadline; change target; abstain; reconnect; independent voters; runoff reset; marker removed after voting; desktop/mobile screenshots; no page errors.');
+  console.log('PASS: six browser clients; night ability is one-click with private marker; one-click/keyboard/touch votes; no confirmation; private marker; latest rapid click; tally waits for deadline; change target; abstain; reconnect; independent voters; runoff reset; marker removed after voting; desktop/mobile screenshots; no page errors.');
 } finally { await browser?.close(); server.kill(); }

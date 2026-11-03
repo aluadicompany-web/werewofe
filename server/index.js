@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { room, join, configure, start, act, advance, view, resetToLobby } from './game.js';
+import { room, join, configure, start, act, advance, view, resetToLobby, members, canManage, controller, selectHost, setParticipation, kick, numberSeats } from './game.js';
 import { requireGM, addBot, fillBots, clearBots, runBots, gmProjection, setGMRole } from './bots.js';
 import { isWolf } from '../shared/rules.js';
 import { createGMGate } from './gm-auth.js';
@@ -43,13 +43,14 @@ function closeRoom(r) {
 }
 function leave(socket) {
   const r = rooms.get(socket.data.code); if (!r) return;
-  const p = r.players.find(p => p.id === socket.data.playerId);
+  const p = members(r).find(p => p.id === socket.data.playerId);
   if (r.isTest && p?.id === r.gmId) { closeRoom(r); return; }
-  if (r.phase === 'lobby') r.players = r.players.filter(x => x !== p);
+  if (r.phase === 'lobby' || controller(r, p?.id)) { r.players = r.players.filter(x => x !== p); r.controllers = r.controllers.filter(x => x !== p); }
   else if (p) { p.connected = false; p.authToken = null; p.previousToken = null; }
-  if (r.host === p?.id) r.host = r.players.find(p => p.connected && !p.isBot)?.id || r.players.find(p => !p.isBot)?.id;
-  socket.data.code = null; socket.data.playerId = null;
-  if (!r.players.length) rooms.delete(r.code); else publish(r);
+  if (r.host === p?.id) selectHost(r);
+  if (r.owner === p?.id) r.owner = r.host;
+  socket.data.code = null; socket.data.playerId = null; numberSeats(r);
+  if (!members(r).length) rooms.delete(r.code); else publish(r);
 }
 io.on('connection', socket => {
   let rate = { at: Date.now(), count: 0 };
@@ -72,29 +73,38 @@ io.on('connection', socket => {
     } else {
       const code = String(d.code || '').trim().toUpperCase(); r = rooms.get(code); if (!r) throw Error('ไม่พบห้องนี้ ตรวจสอบรหัสอีกครั้ง');
       if (d.token) {
-        p = r.players.find(p => p.authToken === d.token || (p.previousToken === d.token && p.previousTokenUntil > Date.now()));
-        if (!p || p.isBot) throw Error('ที่นั่งเดิมหมดอายุหรือถูกนำออกจากห้อง กรุณาเข้าร่วมใหม่');
+        p = members(r).find(p => p.authToken === d.token || (p.previousToken === d.token && p.previousTokenUntil > Date.now()));
+        if (!p || p.isBot || p.kicked) throw Error('ที่นั่งเดิมหมดอายุหรือถูกนำออกจากห้อง กรุณาเข้าร่วมใหม่');
         for (const other of io.sockets.sockets.values()) if (other !== socket && other.data.code === code && other.data.playerId === p.id) { other.data.code = null; other.emit('replaced'); other.disconnect(true); }
         p.previousToken = p.authToken; p.previousTokenUntil = Date.now() + 30000; p.authToken = randomUUID(); p.connected = true;
       } else { const id = randomUUID(); join(r, name, id); p = r.players.find(p => p.id === id); }
     }
-    if (!r.isTest && !r.players.find(player => player.id === r.host)?.connected) r.host = p.id;
+    if (!r.isTest && !members(r).find(player => player.id === r.host)?.connected) selectHost(r);
     socket.data.code = r.code; socket.data.playerId = p.id; r.touched = Date.now(); publish(r);
     return { token: p.authToken, code: r.code };
   });
-  const current = () => { const r = rooms.get(socket.data.code); if (!r) throw Error('กรุณาเข้าห้องก่อน'); r.touched = Date.now(); return r; };
-  handle('remove', d => {
-    const r = current(); if (r.host !== socket.data.playerId || r.phase !== 'lobby') throw Error('เฉพาะเจ้าของห้องจัดการที่นั่งในห้องรอได้');
-    const target = r.players.find(p => p.seat === d.target); if (!target || target.connected) throw Error('นำออกได้เฉพาะผู้เล่นที่หลุดการเชื่อมต่อ');
-    r.players = r.players.filter(p => p !== target); publish(r);
+  const current = () => { const r = rooms.get(socket.data.code); if (!r || !members(r).some(p => p.id === socket.data.playerId && !p.kicked)) throw Error('กรุณาเข้าห้องก่อน'); r.touched = Date.now(); return r; };
+  const removePlayer = d => {
+    const r = current(); const removed = kick(r, socket.data.playerId, d.target);
+    for (const other of io.sockets.sockets.values()) if (other.data.code === r.code && other.data.playerId === removed.id) {
+      other.data.code = null; other.data.playerId = null; other.emit('kicked');
+    }
+    publish(r);
+  };
+  handle('remove', removePlayer); handle('kick', removePlayer);
+  handle('participation', d => { const r = current(); setParticipation(r, socket.data.playerId, d.playing); publish(r); });
+  handle('host_step', d => {
+    const r = current();
+    if (!canManage(r, socket.data.playerId) || !controller(r, socket.data.playerId) || !r.deadline || d.gameId !== r.gameId || d.phaseId !== r.phaseId) throw Error('เฉพาะผู้คุมเกมจบช่วงปัจจุบันได้');
+    advance(r, d.phaseId); publish(r);
   });
   handle('settings', d => { const r = current(); configure(r, socket.data.playerId, d.timing ?? r.timing, d.mode ?? r.mode); publish(r); });
-  handle('ready', () => { const r = current(); if (r.phase !== 'lobby') throw Error('เกมเริ่มแล้ว'); const p = r.players.find(p => p.id === socket.data.playerId); p.ready = !p.ready; publish(r); });
+  handle('ready', () => { const r = current(); if (r.phase !== 'lobby') throw Error('เกมเริ่มแล้ว'); const p = r.players.find(p => p.id === socket.data.playerId); if (!p) throw Error('ผู้คุมเกมไม่ต้องกดพร้อม'); p.ready = !p.ready; publish(r); });
   handle('start', () => { const r = current(); start(r, socket.data.playerId); publish(r); });
   handle('action', d => { const r = current(); act(r, socket.data.playerId, d); publish(r); });
-  handle('next', d => { const r = current(); if (d.gameId !== r.gameId || d.phaseId !== r.phaseId || r.host !== socket.data.playerId || r.phase !== 'discussion') throw Error('เจ้าของห้องเปิดโหวตได้เฉพาะช่วงสนทนาปัจจุบัน'); advance(r); publish(r); });
+  handle('next', d => { const r = current(); if (d.gameId !== r.gameId || d.phaseId !== r.phaseId || !canManage(r, socket.data.playerId) || r.phase !== 'discussion') throw Error('เจ้าของห้องเปิดโหวตได้เฉพาะช่วงสนทนาปัจจุบัน'); advance(r); publish(r); });
   handle('rematch', () => {
-    const r = current(); if (r.host !== socket.data.playerId || r.phase !== 'ended') throw Error('เริ่มใหม่ได้เมื่อจบเกมโดยเจ้าของห้อง');
+    const r = current(); if (!canManage(r, socket.data.playerId) || r.phase !== 'ended') throw Error('เริ่มใหม่ได้เมื่อจบเกมโดยเจ้าของห้อง');
     resetToLobby(r); publish(r);
   });
   handle('gm_bots', d => {
@@ -123,11 +133,11 @@ io.on('connection', socket => {
   });
   handle('gm_reset', () => { const r = current(); requireGM(r, socket.data.playerId); resetToLobby(r); publish(r); });
   handle('chat', d => {
-    const r = current(); const p = r.players.find(p => p.id === socket.data.playerId); const text = typeof d.text === 'string' ? d.text.trim() : '';
+    const r = current(); const p = members(r).find(p => p.id === socket.data.playerId); const text = typeof d.text === 'string' ? d.text.trim() : '';
     if (!text || text.length > 300) throw Error('ข้อความต้องมี 1–300 ตัวอักษร');
     const channel = d.channel === 'wolves' ? 'wolves' : 'village';
     if (!['lobby', 'ended', 'result'].includes(r.phase)) {
-      if (!p.alive) throw Error('ผู้ถูกกำจัดอ่านแชตได้ แต่ส่งข้อความไม่ได้');
+      if (!p.alive && !controller(r, p.id)) throw Error('ผู้ถูกกำจัดอ่านแชตได้ แต่ส่งข้อความไม่ได้');
       const allowed = channel === 'wolves' ? isWolf(p.role) && r.phase === 'night' : ['discussion', 'voting', 'runoff'].includes(r.phase);
       if (!allowed) throw Error('ช่องสนทนานี้ยังใช้ไม่ได้ในช่วงนี้');
     } else if (channel === 'wolves') throw Error('ช่องหมาป่าใช้ได้ตอนกลางคืนเท่านั้น');
@@ -136,8 +146,8 @@ io.on('connection', socket => {
   handle('leave', () => { leave(socket); });
   socket.on('disconnect', () => {
     const r = rooms.get(socket.data.code); if (!r) return;
-    const p = r.players.find(p => p.id === socket.data.playerId); if (p) { p.connected = false; if (r.phase === 'lobby') p.ready = false; }
-    if (!r.isTest && r.host === p?.id) r.host = r.players.find(x => x.connected && !x.isBot)?.id || r.host;
+    const p = members(r).find(p => p.id === socket.data.playerId); if (p) { p.connected = false; if (r.phase === 'lobby') p.ready = false; }
+    if (!r.isTest && r.host === p?.id) selectHost(r);
     r.touched = Date.now(); publish(r);
   });
 });
@@ -145,7 +155,7 @@ setInterval(() => {
   for (const r of rooms.values()) {
     if (r.deadline && Date.now() >= r.deadline) { advance(r, r.phaseId); publish(r); }
     else if (runBots(r)) publish(r);
-    if (!r.players.some(p => p.connected && !p.isBot) && Date.now() - (r.touched || 0) > 30 * 60 * 1000) closeRoom(r);
+    if (!members(r).some(p => p.connected && !p.isBot) && Date.now() - (r.touched || 0) > 30 * 60 * 1000) closeRoom(r);
   }
 }, 100).unref();
 const port = Number(process.env.PORT || 3000); http.listen(port, '0.0.0.0', () => console.log(`Moonfall listening on ${port}`));

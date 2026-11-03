@@ -41,7 +41,7 @@ try {
       await expect(restored.locator('#game')).toBeVisible(); await expect(restored.locator('.player:not(.empty)')).toHaveCount(2);
       if (!inherited) throw Error('New player has no host controls while old host is offline');
       await expect(guest.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true })).toBeVisible();
-      await expect(restored.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true })).toHaveCount(0);
+      await expect(restored.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true })).toBeVisible();
     } finally { if (guest) await leave(guest); if (restored) await leave(restored); }
   });
   await check('Mobile 320/360/390px layout and toast clear of bottom branding', async () => {

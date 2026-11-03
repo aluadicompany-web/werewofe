@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { ROLES, MODES, getPreset, isWolf } from '../shared/rules.js';
-import { act, join, view } from './game.js';
+import { act, join, view, controller } from './game.js';
 export function requireGM(r, actor) {
   if (!r.isTest || r.gmId !== actor) throw Error('คำสั่งนี้ใช้ได้เฉพาะ GM เจ้าของห้องทดสอบ');
 }
@@ -21,6 +21,7 @@ export function fillBots(r, actor, total) {
 export function clearBots(r, actor) { lobbyGM(r, actor); r.players = r.players.filter(p => !p.isBot); }
 export function setGMRole(r, actor, role) {
   lobbyGM(r, actor);
+  if (controller(r, actor)) throw Error('กลับเป็นผู้เล่นก่อนเลือกบทบาท GM');
   const selected = role === 'random' ? null : role;
   const preset = getPreset(r.mode, r.players.length) || getPreset(r.mode, MODES[r.mode].minPlayers);
   if (selected !== null && (typeof selected !== 'string' || !Object.hasOwn(ROLES, selected) || !Object.hasOwn(preset, selected))) throw Error('บทบาทนี้ไม่มีในชุดของโหมดและจำนวนคนนี้');

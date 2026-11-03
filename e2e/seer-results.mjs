@@ -20,7 +20,7 @@ try {
   const seer = assigned.findIndex(r => r.includes('ผู้หยั่งรู้')), wolf = assigned.findIndex(r => r.includes('มนุษย์หมาป่า')), village = assigned.findIndex(r => r.includes('ชาวบ้าน'));
   const seats = await pages[0].locator('.player').evaluateAll(cards => cards.map(c => c.dataset.seat));
   const card = (viewer, index) => pages[viewer].locator(`.player[data-seat="${seats[index]}"]`);
-  const inspect = async target => { await card(seer, target).click(); await pages[seer].getByRole('button', { name: 'ยืนยันเป้าหมาย →', exact: true }).click(); await expect(pages[seer].locator('#selection')).toContainText('คำสั่งล่าสุด'); };
+  const inspect = async target => { await card(seer, target).click(); await expect(pages[seer].locator('.ability-marker')).toHaveCount(1); await expect(pages[seer].locator('#selection')).toContainText('คำสั่งล่าสุด'); };
   await expect(pages[seer].locator('#game')).toHaveAttribute('data-phase', 'night', { timeout: 10000 }); await inspect(village);
   for (const p of pages) await expect(p.locator('.seer-mark')).toHaveCount(0);
   await expect(card(seer, village).locator('.seat .seer-mark')).toHaveText('👍', { timeout: 15000 });

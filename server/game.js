@@ -4,33 +4,42 @@ export const roles = ROLES;
 const fail = message => { throw new Error(message); };
 const alive = r => r.players.filter(p => p.alive);
 const wolves = p => isWolf(p.role);
+export const members = r => [...r.players, ...r.controllers];
+export const canManage = (r, actor) => members(r).some(p => p.id === actor && !p.kicked) && [r.owner, r.host, r.gmId].includes(actor);
+export function numberSeats(r) { if (r.phase === 'lobby') { r.players.forEach((p,i) => p.seatIndex = i + 1); r.controllers.forEach(p => p.seatIndex = 0); } }
+export const controller = (r, actor) => r.controllers.some(p => p.id === actor);
+export function selectHost(r) {
+  const connected = members(r).filter(p => p.connected && !p.isBot && !p.kicked);
+  r.host = connected.find(p => p.id === r.owner)?.id || connected[0]?.id || r.host;
+}
 export function room(code, name, token, options = {}) {
-  const r = { code, host: token, phase: 'lobby', phaseId: randomUUID(), gameId: null, round: 0,
+  const r = { code, owner: token, host: token, controllers: [], phase: 'lobby', phaseId: randomUUID(), gameId: null, round: 0,
     isTest: Boolean(options.isTest), gmId: options.isTest ? token : null, testSpeed: 1, gmRole: null, baseTimerScale: options.timerScale || 1,
     mode: 'classic', timing: 'standard', timerScale: options.timerScale || 1, players: [], actions: {}, votes: {},
     messages: [], log: [], events: [], receipts: {}, deadline: null, winner: null, runoff: [], pending: null, nightPlan: null, reaction: null };
   join(r, name, token); return r;
 }
 export function join(r, name, token) {
-  if (r.players.some(p => p.id === token)) return;
+  if (members(r).some(p => p.id === token)) return;
   if (r.phase !== 'lobby') fail('เกมเริ่มแล้ว กรุณารอเกมถัดไป');
   if (r.players.length >= 12) fail('ห้องเต็มแล้ว (สูงสุด 12 คน)');
-  if (r.players.some(p => p.name.toLowerCase() === name.toLowerCase())) fail('ชื่อนี้ถูกใช้แล้วในห้อง');
-  const seatIndex = r.players.reduce((max, p) => Math.max(max, p.seatIndex), 0) + 1;
+  if (members(r).some(p => p.name.toLowerCase() === name.toLowerCase())) fail('ชื่อนี้ถูกใช้แล้วในห้อง');
+  const seatIndex = members(r).reduce((max, p) => Math.max(max, p.seatIndex), 0) + 1;
   r.players.push({ id: token, authToken: token, previousToken: null, previousTokenUntil: 0, seat: randomUUID(), seatIndex, name, connected: true, ready: false, alive: true,
     role: null, lastDoctor: null, armor: 1, hunterUsed: false, revealed: false, visions: [] });
+  numberSeats(r);
 }
 function audit(r, kind, payload, visibility = 'server') {
   r.events.push(Object.freeze({ id: randomUUID(), gameId: r.gameId, kind, at: Date.now(), payload: Object.freeze({ ...payload }), visibility }));
 }
 export function configure(r, actor, timing, mode = r.mode) {
-  if (r.host !== actor || r.phase !== 'lobby') fail('เฉพาะเจ้าของห้องตั้งค่าในห้องรอได้');
+  if (!canManage(r, actor) || r.phase !== 'lobby') fail('เฉพาะเจ้าของห้องตั้งค่าในห้องรอได้');
   if (!Object.hasOwn(TIMINGS, timing)) fail('รูปแบบเวลาไม่ถูกต้อง');
   if (!Object.hasOwn(MODES, mode)) fail('โหมดนี้ยังไม่เปิดให้เล่น');
   r.mode = mode; r.timing = timing; r.players.forEach(p => p.ready = Boolean(p.isBot));
 }
 export function start(r, actor) {
-  if (r.host !== actor) fail('เฉพาะเจ้าของห้องเริ่มเกมได้');
+  if (!canManage(r, actor)) fail('เฉพาะเจ้าของห้องเริ่มเกมได้');
   if (r.phase !== 'lobby') fail('เกมเริ่มไปแล้ว');
   if (!Object.hasOwn(MODES, r.mode)) fail('โหมดนี้ยังไม่เปิดให้เล่น');
   const preset = getPreset(r.mode, r.players.length);
@@ -101,8 +110,8 @@ function lockNight(r) {
 function resolveNight(r) {
   const plan = r.nightPlan;
   r.pending = { from: 'night', deaths: [], visions: plan.visions };
-  const target = r.players.find(p => p.seat === plan.target);
-  const witch = r.players.find(p => p.id === plan.witch);
+  const target = r.players.find(p => p.seat === plan.target && p.alive);
+  const witch = r.players.find(p => p.id === plan.witch && p.alive);
   const decision = witch && r.actions[witch.id];
   let saved = false, poisoned = null;
   if (decision && decision !== 'skip') {
@@ -130,7 +139,7 @@ function resolveNight(r) {
 }
 function queueReaction(r) {
   const hunter = r.pending.deaths.map(d => ({ p: r.players.find(p => p.seat === d.seat), cause: d.cause }))
-    .find(({ p, cause }) => p.role === 'hunter' && !p.hunterUsed && ['wolf_attack', 'execution'].includes(cause));
+    .find(({ p, cause }) => !p.kicked && p.role === 'hunter' && !p.hunterUsed && ['wolf_attack', 'execution'].includes(cause));
   if (hunter) { hunter.p.hunterUsed = true; r.reaction = hunter.p.id; setPhase(r, 'hunter_reaction'); }
   else finishResolution(r);
 }
@@ -188,7 +197,7 @@ export function act(r, actor, payload) {
   if (r.receipts[key]) { if (r.receipts[key] !== signature) fail('actionId ซ้ำแต่ข้อมูลต่างกัน'); return; }
   if (phaseId !== r.phaseId || !r.deadline || Date.now() >= r.deadline) fail('หมดเวลาหรือเป็นคำสั่งจากช่วงก่อนหน้า');
   const p = r.players.find(p => p.id === actor); const t = r.players.find(p => p.seat === target);
-  if (!p || (!p.alive && !(r.phase === 'hunter_reaction' && r.reaction === actor))) fail('ผู้ถูกกำจัดไม่สามารถกระทำได้');
+  if (!p || p.kicked || (!p.alive && !(r.phase === 'hunter_reaction' && r.reaction === actor))) fail('ผู้ถูกกำจัดไม่สามารถกระทำได้');
   const pass = target === 'skip'; if (!pass && !t?.alive) fail('เลือกผู้เล่นที่ยังมีชีวิต');
   if (r.phase !== 'witch_decision' && ability !== undefined) fail('ช่วงนี้ไม่รับคำสั่งยา');
   if (r.phase === 'night') {
@@ -215,12 +224,12 @@ export function act(r, actor, payload) {
   r.receipts[key] = signature; audit(r, 'action_accepted', { actor: p.seat, phaseId, actionId, target, ...(ability ? { ability } : {}) });
 }
 export function view(r, actor) {
-  const me = r.players.find(p => p.id === actor), finished = ['result', 'ended'].includes(r.phase);
+  const me = members(r).find(p => p.id === actor && !p.kicked), finished = ['result', 'ended'].includes(r.phase);
   const roleOf = p => finished || p.revealed || p === me || (wolves(me || {}) && wolves(p)) ? p.role : null;
-  return { code: r.code, testRoom: Boolean(r.isTest), gm: Boolean(r.isTest && r.gmId === actor), gameId: r.gameId, phaseId: r.phaseId, phase: r.phase, mode: r.mode, timing: r.timing,
+  return { timeOfDay: ['role_reveal','night','witch_decision'].includes(r.phase) || r.phase === 'hunter_reaction' && r.pending?.from === 'night' ? 'night' : ['announcement','discussion','voting','runoff','execution'].includes(r.phase) || r.phase === 'hunter_reaction' ? 'day' : 'neutral', code: r.code, canManage: canManage(r, actor), owner: r.owner === actor, controller: controller(r, actor), controllers: r.controllers.map(p => ({ id: p.seat, name: p.name, me: p === me, connected: p.connected, host: p.id === r.host, owner: p.id === r.owner, gm: p.id === r.gmId })), testRoom: Boolean(r.isTest), gm: Boolean(r.isTest && r.gmId === actor), gameId: r.gameId, phaseId: r.phaseId, phase: r.phase, mode: r.mode, timing: r.timing,
     preset: getPreset(r.mode, r.players.length), round: r.round, deadline: r.deadline, winner: r.winner, host: r.host === actor,
     runoff: r.runoff, hunter: r.players.find(p => p.id === r.reaction)?.seat || null,
-    players: r.players.map(p => ({ id: p.seat, seatIndex: p.seatIndex, name: p.name, bot: Boolean(p.isBot), connected: p.connected, ready: p.ready, alive: p.alive,
+    players: r.players.map(p => ({ id: p.seat, seatIndex: p.seatIndex, name: p.name, bot: Boolean(p.isBot), connected: p.connected, ready: p.ready, alive: p.alive, kicked: Boolean(p.kicked), canKick: canManage(r, actor) && p.id !== actor && (p.id !== r.owner || r.phase === 'lobby' && !p.connected) && p.id !== r.gmId && !p.kicked,
       me: p === me, host: r.host === p.id, role: roleOf(p) })),
     me: me ? { role: me.role, alive: me.alive, ready: me.ready, visions: me.visions, lastDoctor: me.lastDoctor,
       potions: me.role === 'witch' ? { ...me.potions } : null,
@@ -232,8 +241,56 @@ export function view(r, actor) {
 }
 
 export function resetToLobby(r) {
-  r.players = r.players.filter(p => p.connected || p.isBot || p.id === r.gmId);
+  r.players = r.players.filter(p => !p.kicked && (p.connected || p.isBot || p.id === r.gmId || p.id === r.owner));
+  r.controllers = r.controllers.filter(p => p.connected || [r.owner, r.host, r.gmId].includes(p.id));
   r.phase = 'lobby'; r.phaseId = randomUUID(); r.gameId = null; r.winner = null; r.deadline = null; r.round = 0;
   r.actions = {}; r.votes = {}; r.receipts = {}; r.messages = []; r.log = []; r.events = []; r.pending = null; r.nightPlan = null; r.reaction = null; r.runoff = [];
   r.players.forEach(p => { p.ready = Boolean(p.isBot); p.role = null; p.alive = true; p.visions = []; p.lastDoctor = null; p.revealed = false; p.hunterUsed = false; p.armor = 1; p.potions = { save: 1, poison: 1 }; });
+  numberSeats(r);
+}
+
+// Room management is separate from role actions. Controllers never enter the deck.
+export function setParticipation(r, actor, playing) {
+  if (!canManage(r, actor) || r.phase !== 'lobby') fail('เจ้าของห้องหรือ Host เปลี่ยนที่นั่งได้เฉพาะห้องรอ');
+  if (typeof playing !== 'boolean') fail('เลือกที่นั่งผู้เล่นหรือผู้คุมเกม');
+  const isController = controller(r, actor);
+  if (playing === !isController) return;
+  if (!playing && r.controllers.length >= 2) fail('ห้องนี้มีผู้คุมเกมครบ 2 คนแล้ว');
+  if (playing && r.players.length >= 12) fail('ที่นั่งผู้เล่นเต็มแล้ว (สูงสุด 12 คน ไม่รวมผู้คุมเกม)');
+  const source = isController ? r.controllers : r.players;
+  const p = source.find(p => p.id === actor);
+  if (isController) r.controllers = source.filter(x => x !== p);
+  else r.players = source.filter(x => x !== p);
+  p.ready = false; p.alive = playing; p.role = null; p.visions = [];
+  (playing ? r.players : r.controllers).push(p);
+  numberSeats(r);
+  if (actor === r.gmId && !playing) r.gmRole = null;
+  r.players.forEach(p => p.ready = Boolean(p.isBot));
+}
+export function kick(r, actor, seat) {
+  if (!canManage(r, actor)) fail('เฉพาะเจ้าของห้องหรือ Host เตะผู้เล่นได้');
+  const p = r.players.find(p => p.seat === seat && !p.kicked);
+  if (!p || [actor, r.gmId].includes(p.id) || p.id === r.owner && (r.phase !== 'lobby' || p.connected)) fail('ไม่สามารถเตะผู้เล่นนี้ได้');
+  p.kicked = true; p.connected = false; p.authToken = null; p.previousToken = null; p.previousTokenUntil = 0;
+  p.alive = false; p.ready = false; p.isBot = false; p.revealed = true;
+  delete r.actions[p.id]; delete r.votes[p.id];
+  for (const [id, value] of Object.entries(r.actions)) if (value === seat || value?.target === seat) delete r.actions[id];
+  for (const [id, value] of Object.entries(r.votes)) if (value === seat) delete r.votes[id];
+  r.runoff = r.runoff.filter(id => id !== seat);
+  if (r.nightPlan) {
+    if (r.nightPlan.target === seat) r.nightPlan.target = null;
+    if (r.nightPlan.protection === seat || p.role === 'doctor') r.nightPlan.protection = null;
+    if (r.nightPlan.guarded === seat || r.nightPlan.guard === p.id) { r.nightPlan.guarded = null; r.nightPlan.guard = null; }
+    if (r.nightPlan.witch === p.id) r.nightPlan.witch = null;
+  }
+  audit(r, 'player_kicked', { seat });
+  if (r.phase === 'lobby') { r.players = r.players.filter(x => x !== p); numberSeats(r); r.players.forEach(p => p.ready = Boolean(p.isBot)); }
+  else {
+    r.log.push(`${p.name} ถูกนำออกจากห้องโดยผู้ดูแล`);
+    if (r.reaction === p.id) advance(r);
+    else if (!['night','witch_decision','role_reveal','result','ended'].includes(r.phase)) winner(r);
+  }
+  if (r.owner === p.id) r.owner = actor;
+  if (r.host === p.id) selectHost(r);
+  return p;
 }
