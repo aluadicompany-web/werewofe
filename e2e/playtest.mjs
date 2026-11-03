@@ -45,6 +45,7 @@ try {
    for(let i=0;i<count;i++){if(wolfIndices.slice(0,round).includes(i))continue;await expect(pages[i].locator('#phase-title')).toHaveText('ใครคือมนุษย์หมาป่า?');await choose(i,wolfIndices[round]);}
   }
   await expect(pages[0].getByRole('button',{name:'เล่นอีกครั้ง ↻',exact:true})).toBeVisible({timeout:15000});await expect(pages[0].locator('#phase-title')).toHaveText('หมู่บ้านเป็นฝ่ายชนะ');await pages[0].screenshot({path:`test-results/victory-${count}-desktop.png`,fullPage:true});
+  for(const p of pages)if(await p.locator('#match-outcome').isVisible())await p.locator('#close-outcome').click();
   await pages[0].getByRole('button',{name:'เล่นอีกครั้ง ↻',exact:true}).click();await expect(pages[0].locator('#phase-title')).toHaveText('ล้อมวงรอเพื่อน');
   await pages[0].setViewportSize({width:390,height:844});await pages[0].screenshot({path:`test-results/lobby-${count}-mobile.png`,fullPage:true});if(await pages[0].evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('mobile board horizontal overflow');
   console.log(`PASS: ${count}-player browser match on static frontend + separate realtime origin; shared invite, roles, abilities, private chat, voting, victory, reconnect, rematch, mobile.`);

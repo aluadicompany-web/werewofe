@@ -16,7 +16,8 @@
     "test:gm": "node e2e/gm-room.mjs",
     "test:seer": "node e2e/seer-results.mjs",
     "test:advanced": "node e2e/advanced.mjs",
-    "test:controls": "node e2e/phase-controls.mjs"
+    "test:controls": "node e2e/phase-controls.mjs",
+    "test:minion": "node e2e/minion-outcome.mjs"
   },
   "engines": {
     "node": ">=22"

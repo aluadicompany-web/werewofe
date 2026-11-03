@@ -28,7 +28,7 @@ try {
   await gm.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click(); await guest.getByRole('button', { name: 'ฉันพร้อมแล้ว', exact: true }).click();
   await gm.getByRole('button', { name: 'เริ่มคืนแรก →', exact: true }).click(); await gm.locator('#reveal').click(); await expect(gm.locator('#role-content h3')).toContainText('ผู้หยั่งรู้'); await expect(gm.locator('#gm-role')).toHaveCount(0);
 
-  const step = async () => { const before = await gm.locator('#game').getAttribute('data-phase-id'); await gm.getByRole('button', { name: 'จบช่วงนี้ →', exact: true }).click(); await expect.poll(() => gm.locator('#game').getAttribute('data-phase-id')).not.toBe(before); };
+  const step = async () => { if (await gm.locator('#match-outcome').isVisible()) await gm.locator('#close-outcome').click(); const before = await gm.locator('#game').getAttribute('data-phase-id'); await gm.getByRole('button', { name: 'จบช่วงนี้ →', exact: true }).click(); await expect.poll(() => gm.locator('#game').getAttribute('data-phase-id')).not.toBe(before); };
   await step(); await expect(gm.locator('#game')).toHaveAttribute('data-phase', 'night');
   await gm.locator('#gm-reveal').check(); await expect(gm.locator('#gm-debug tr')).toHaveCount(7); await expect(guest.locator('#gm-debug tr')).toHaveCount(0);
   await expect.poll(async () => {
@@ -51,6 +51,7 @@ try {
   }
   await expect(gm.locator('#game')).toHaveAttribute('data-phase', 'ended'); await expect(gm.locator('#phase-title')).toHaveText(/เป็นฝ่ายชนะ|เสมอ/);
   await gm.screenshot({ path: 'test-results/gm-room/finished-desktop.png', fullPage: true });
+  if (await gm.locator('#match-outcome').isVisible()) await gm.locator('#close-outcome').click();
   await gm.getByRole('button', { name: 'เล่นอีกครั้ง ↻', exact: true }).click(); await guest.locator('#join').click(); await expect(guest.locator('#game')).toBeVisible();
   gm.once('dialog', d => d.accept()); await gm.locator('#leave').click(); await expect(gm.locator('#landing')).toBeVisible(); await expect(guest.locator('#landing')).toBeVisible(); await expect(guest.locator('#toast')).toHaveText('GM ปิดห้องทดสอบแล้ว');
   if (errors.length) throw Error(errors.join('\n'));

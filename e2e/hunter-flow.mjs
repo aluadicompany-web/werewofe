@@ -43,6 +43,7 @@ try {
   for (const p of pages) await expect(p.locator('#phase-title')).toHaveText('หมู่บ้านเป็นฝ่ายชนะ');
   await expect(pages[seer].locator('#role-content .vision')).toContainText('เป็นหมาป่า');
   await pages[0].screenshot({ path: 'test-results/hunter-flow/victory-desktop.png', fullPage: true });
+  for (const p of pages) if (await p.locator('#match-outcome').isVisible()) await p.locator('#close-outcome').click();
   await pages[0].getByRole('button', { name: 'เล่นอีกครั้ง ↻', exact: true }).click();
   for (const p of pages) { p.once('dialog', d => d.accept()); await p.locator('#leave').click(); await expect(p.locator('#landing')).toBeVisible(); }
   if (errors.length) throw Error(errors.join('\n'));

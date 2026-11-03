@@ -17,7 +17,7 @@ test('real 6-player match: roles, deadline changes, private chat, rotated reconn
   assert.equal((await emit(host,'start')).ok,false);for(const s of sockets)await emit(s,'ready');assert.equal((await emit(host,'start')).ok,true);
   await until(()=>sockets.every(s=>s.state?.phase==='night'));
   const [wolf,seer,doctor,villager]=['werewolf','seer','doctor','villager'].map(role=>sockets.find(s=>s.state.me.role===role));
-  for(const s of sockets){assert.equal(s.state.players.filter(p=>p.role).length,1);for(const c of creds)assert.ok(!JSON.stringify(s.state).includes(c.token));}
+  for(const s of sockets){assert.equal(s.state.players.filter(p=>p.role).length,s.state.me.role==='minion'?2:1);for(const c of creds)assert.ok(!JSON.stringify(s.state).includes(c.token));}
   assert.equal((await emit(villager,'chat',{text:'cannot talk at night'})).ok,false);await emit(wolf,'chat',{text:'secret plan',channel:'wolves'});await delay(20);assert.equal(villager.state.messages.length,0);assert.equal(wolf.state.messages.length,1);
   const victim=villager.state.players.find(p=>p.me).id,wolfSeat=wolf.state.players.find(p=>p.me).id;
   await action(wolf,'skip');const packet={target:victim,gameId:wolf.state.gameId,phaseId:wolf.state.phaseId,actionId:randomUUID()};assert.equal((await emit(wolf,'action',packet)).ok,true);assert.equal((await emit(wolf,'action',packet)).ok,true);

@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 const serverUrl = window.MOONFALL_CONFIG?.serverUrl || window.location.origin;
 const socket = io(serverUrl);
 let state, reveal = false, lastPhase = '', busy = false, witchAbility = 'save';
+let dismissedOutcome = null; try { dismissedOutcome = sessionStorage.getItem('moonfall-outcome-dismissed'); } catch {}
 let session; try { session = JSON.parse(sessionStorage.getItem('moonfall') || 'null'); } catch { session = null; }
 const invite = new URL(location.href).searchParams.get('room');
 if (invite && /^[A-F0-9]{6}$/i.test(invite)) $('code').value = invite.toUpperCase();
@@ -16,7 +17,7 @@ function send(event, data = {}) {
   });
 }
 function saveSession(value) { session = value; try { if (value) sessionStorage.setItem('moonfall', JSON.stringify(value)); else sessionStorage.removeItem('moonfall'); } catch { toast('เบราว์เซอร์ไม่อนุญาตให้จำที่นั่งเมื่อรีเฟรช'); } }
-function showLanding() { state = null; reveal = false; $('game').hidden = true; $('landing').hidden = false; $('gm-open').hidden = false; document.body.dataset.cycle = 'neutral'; }
+function showLanding() { if ($('match-outcome').open) $('match-outcome').close(); state = null; reveal = false; $('game').hidden = true; $('landing').hidden = false; $('gm-open').hidden = false; document.body.dataset.cycle = 'neutral'; }
 socket.on('connect', () => {
   $('connection').textContent = 'เชื่อมต่อแล้ว'; $('connection').classList.remove('offline');
   if (session) socket.timeout(8000).emit('enter', session, (err, result) => {
@@ -59,8 +60,14 @@ $('gm-form').onsubmit = async e => {
 $('host-seat').onclick = () => send('participation', { playing: Boolean(state.controller) });
 $('host-step').onclick = () => { if (confirm('จบช่วงปัจจุบันและนับคำสั่งที่ส่งแล้วทันที?')) send('host_step', { gameId: state.gameId, phaseId: state.phaseId }); };
 $('gm-reveal').onchange = () => render();
+function dismissOutcome() {
+  if (state?.gameId) { dismissedOutcome = state.gameId; try { sessionStorage.setItem('moonfall-outcome-dismissed', dismissedOutcome); } catch {} }
+  $('match-outcome').close();
+}
+$('match-outcome').addEventListener('click', dismissOutcome);
+$('match-outcome').addEventListener('cancel', e => { e.preventDefault(); dismissOutcome(); });
 $('help').onclick = () => $('rules').showModal(); $('close-rules').onclick = () => $('rules').close();
-document.addEventListener('keydown', e => { if (e.key === '?' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { e.preventDefault(); if (!$('rules').open) $('rules').showModal(); } });
+document.addEventListener('keydown', e => { if (e.key === '?' && !$('match-outcome').open && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { e.preventDefault(); if (!$('rules').open) $('rules').showModal(); } });
 async function copy(value, success) { try { await navigator.clipboard.writeText(value); toast(success); } catch { toast(value); } }
 $('copy').onclick = () => copy(state.code, 'คัดลอกรหัสห้องแล้ว');
 $('copy-link').onclick = () => { const url = new URL(location.href); url.search = ''; url.hash = ''; url.searchParams.set('room', state.code); copy(url.href, 'คัดลอกลิงก์เชิญแล้ว เพียงเปิดลิงก์และกรอกชื่อ'); };
@@ -94,6 +101,8 @@ function render() {
   $('game').dataset.phase = state.phase; $('game').dataset.cycle = state.timeOfDay; document.body.dataset.cycle = state.timeOfDay;
   $('cycle-label').textContent = state.timeOfDay === 'day' ? '☀ กลางวัน' : state.timeOfDay === 'night' ? '☾ กลางคืน' : ''; $('game').dataset.phaseId = state.phaseId;
   $('room-code').textContent = state.code;
+  $('match-roster').hidden = state.phase === 'lobby' || !state.preset;
+  $('match-role-list').replaceChildren(...Object.entries(state.preset || {}).map(([id,count]) => text('span', `${roles[id].icon} ${roles[id].name} × ${count}`, 'role-chip')));
   const live = state.players.filter(p => p.alive).length;
   $('leave').textContent = state.gm ? 'ปิดห้อง GM →' : 'ออกจากห้อง →';
   const mode = MODES[state.mode];
@@ -183,8 +192,19 @@ function render() {
   $('witch-info').textContent = state.me.wolfVictim ? `เหยื่อหมาป่าคืนนี้: ${nameOf(state.me.wolfVictim)} · เห็นเฉพาะคุณ · ยาช่วยชีวิตป้องกันหมาป่าเท่านั้น ยาพิษข้ามทุกการป้องกัน` : 'คืนนี้หมาป่าไม่ได้เลือกเหยื่อ จึงใช้ยาช่วยชีวิตไม่ได้ คุณยังเลือกยาพิษหรือข้ามได้';
   $('wolf-info').hidden = !state.wolfActions.length;
   $('wolf-info').textContent = 'แผนของฝูง: ' + state.wolfActions.map(a => `${a.name} → ${a.target ? nameOf(a.target) : 'ยังไม่เลือก'}`).join(' · ') + ' | หากคะแนนเสมอ จะโจมตีเป้าหมายที่เลขที่นั่งน้อยที่สุด';
-  renderHost(); renderGM(); renderRole(); renderChat(); tick();
+  renderHost(); renderGM(); renderRole(); renderChat(); tick(); renderOutcome();
   if (focusSeat) [...board.querySelectorAll('.player')].find(b => b.dataset.seat === focusSeat && !b.disabled)?.focus({ preventScroll: true });
+}
+function renderOutcome() {
+  const dialog = $('match-outcome');
+  if (!finished() || !state.winner || !state.me?.outcome || state.controller) { if (dialog.open) dialog.close(); return; }
+  if (dismissedOutcome === state.gameId) return;
+  const outcome = state.me.outcome;
+  dialog.dataset.outcome = outcome;
+  $('outcome-word').textContent = outcome === 'win' ? 'WIN' : outcome === 'lose' ? 'LOSE' : 'DRAW';
+  const team = state.winner === 'wolf' ? 'ทีมหมาป่า' : 'ทีมหมู่บ้าน';
+  $('outcome-detail').textContent = outcome === 'draw' ? 'ไม่มีผู้รอดชีวิต · เกมเสมอ' : outcome === 'win' ? `${state.me.alive ? '' : 'คุณถูกกำจัดแล้ว แต่'}${team}ของคุณเป็นฝ่ายชนะ` : `${team}เป็นฝ่ายชนะ · ทีมของคุณแพ้ในแมตช์นี้`;
+  if (!dialog.open) dialog.showModal();
 }
 function renderHost() {
   $('controllers').replaceChildren(...state.controllers.map(p => text('div', `${p.gm ? '⚙ GM' : '🎙 Host'} · ${p.name}${p.me ? ' (คุณ)' : ''}${p.connected ? '' : ' · หลุดการเชื่อมต่อ'}`, 'controller-seat')));

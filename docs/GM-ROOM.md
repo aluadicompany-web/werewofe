@@ -46,3 +46,5 @@
 ## ตรวจสอบ
 
 `npm run check`, `npm test`, `npm run test:gm` และ `npm run test:browser` ใช้ได้โดยไม่รู้รหัส GM จริง ชุด GM ใช้ fixture ที่ตั้งเฉพาะ child test server ไม่ใช่รหัสสำหรับเว็บไซต์จริง ภาพที่บันทึกแสดงเฉพาะห้องทดสอบและไม่แสดงรหัส
+
+Classic 6 คนเลือก **ลูกสมุนหมาป่า** ใน dropdown GM ได้ เมื่อเป็น GM ร่วมเล่น ระบบยังส่ง debugger ให้ตามสิทธิ์ GM จึงควรปิด inspector หากจะดูหน้าจอแบบลูกสมุน อ่าน [MINION-AND-RESULTS.md](MINION-AND-RESULTS.md) สำหรับกติกาและผล WIN/LOSE

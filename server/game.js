@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { ROLES, MODES, getPreset, TIMINGS, isWolf } from '../shared/rules.js';
+import { ROLES, MODES, getPreset, TIMINGS, isWolf, winningTeam, knowsWolves } from '../shared/rules.js';
 export const roles = ROLES;
 const fail = message => { throw new Error(message); };
 const alive = r => r.players.filter(p => p.alive);
@@ -225,13 +225,13 @@ export function act(r, actor, payload) {
 }
 export function view(r, actor) {
   const me = members(r).find(p => p.id === actor && !p.kicked), finished = ['result', 'ended'].includes(r.phase);
-  const roleOf = p => finished || p.revealed || p === me || (wolves(me || {}) && wolves(p)) ? p.role : null;
+  const roleOf = p => finished || p.revealed || p === me || (knowsWolves(me?.role) && wolves(p)) ? p.role : null;
   return { timeOfDay: ['role_reveal','night','witch_decision'].includes(r.phase) || r.phase === 'hunter_reaction' && r.pending?.from === 'night' ? 'night' : ['announcement','discussion','voting','runoff','execution'].includes(r.phase) || r.phase === 'hunter_reaction' ? 'day' : 'neutral', code: r.code, canManage: canManage(r, actor), owner: r.owner === actor, controller: controller(r, actor), controllers: r.controllers.map(p => ({ id: p.seat, name: p.name, me: p === me, connected: p.connected, host: p.id === r.host, owner: p.id === r.owner, gm: p.id === r.gmId })), testRoom: Boolean(r.isTest), gm: Boolean(r.isTest && r.gmId === actor), gameId: r.gameId, phaseId: r.phaseId, phase: r.phase, mode: r.mode, timing: r.timing,
     preset: getPreset(r.mode, r.players.length), round: r.round, deadline: r.deadline, winner: r.winner, host: r.host === actor,
     runoff: r.runoff, hunter: r.players.find(p => p.id === r.reaction)?.seat || null,
     players: r.players.map(p => ({ id: p.seat, seatIndex: p.seatIndex, name: p.name, bot: Boolean(p.isBot), connected: p.connected, ready: p.ready, alive: p.alive, kicked: Boolean(p.kicked), canKick: canManage(r, actor) && p.id !== actor && (p.id !== r.owner || r.phase === 'lobby' && !p.connected) && p.id !== r.gmId && !p.kicked,
       me: p === me, host: r.host === p.id, role: roleOf(p) })),
-    me: me ? { role: me.role, alive: me.alive, ready: me.ready, visions: me.visions, lastDoctor: me.lastDoctor,
+    me: me ? { outcome: finished && me.role && r.winner ? r.winner === 'draw' ? 'draw' : winningTeam(me.role) === r.winner ? 'win' : 'lose' : null, role: me.role, alive: me.alive, ready: me.ready, visions: me.visions, lastDoctor: me.lastDoctor,
       potions: me.role === 'witch' ? { ...me.potions } : null,
       wolfVictim: me.role === 'witch' && r.phase === 'witch_decision' ? r.nightPlan?.target || null : null,
       armor: me.role === 'elder' ? me.armor : null, canReact: r.reaction === me.id,
